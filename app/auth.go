@@ -10,7 +10,9 @@ import (
 	"gorm.io/gorm"
 	"log"
 	"net/mail"
+	"slices"
 	"time"
+	"unicode"
 )
 
 var AuthHandler fiber.Handler
@@ -37,184 +39,86 @@ func SetupAuth() error {
 	return nil
 }
 
-func authUser(c *fiber.Ctx) error {
-	user, userIsUser := c.Locals("user").(*User)
-	if !userIsUser {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	return c.JSON(AuthUserResponse{
-		Slug: user.Slug,
-	}, "application/json")
+func ValidDisplayName(displayName string) bool {
+	return len(displayName) >= MinDisplayNameLength && len(displayName) <= MaxDisplayNameLength
 }
 
-func authRegister(c *fiber.Ctx) error {
-	c.Accepts("application/json")
-
-	if c.Locals("user") != nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
+// ValidSlug returns true if all of these rules are followed:
+//   - slug is at least MinSlugNameLength and no more than MaxSlugNameLength in length
+//   - slug is all lowercase
+//   - slug contains only latin characters, numbers, or a dash
+func ValidSlug(slug string) bool {
+	if len(slug) < MinSlugNameLength || len(slug) > MaxSlugNameLength {
+		return false
 	}
 
-	currentSession, err := SessionStore.Get(c)
-	if err != nil {
-		log.Println(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	var registerBody RegisterDto
-	if bodyErr := c.BodyParser(&registerBody); bodyErr != nil {
-		// TODO: return problem json indicating the error
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	if registerBody.Email != nil {
-		_, emailErr := mail.ParseAddress(*registerBody.Email)
-		if emailErr != nil {
-			// TODO: return problem json indicating the error
-			return c.SendStatus(fiber.StatusBadRequest)
+	for _, r := range []rune(slug) {
+		if !unicode.IsLower(r) && !unicode.IsNumber(r) && !unicode.IsLetter(r) && r != '-' {
+			return false
 		}
 	}
 
-	if registerBody.DisplayName != nil {
-		if !ValidDisplayName(*registerBody.DisplayName) {
-			// TODO: return problem json indicating the error
-			return c.SendStatus(fiber.StatusBadRequest)
+	return true
+}
+
+// ValidPassword returns true if all of these rules are followed:
+//   - password is at least MinPasswordLength and no more than MaxPasswordLength in length
+//   - password contains only latin characters, numbers, or some special characters: !@#$%^&*
+func ValidPassword(password string) bool {
+	if len(password) < MinPasswordLength || len(password) > MaxPasswordLength {
+		return false
+	}
+
+	for _, r := range []rune(password) {
+		if !unicode.IsNumber(r) && !unicode.IsLetter(r) && !slices.Contains(ValidSlugSpecialCharacters, r) {
+			return false
 		}
 	}
 
-	if !ValidSlug(registerBody.Slug) {
-		// TODO: return problem json indicating the error
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	if !ValidPassword(registerBody.Password) {
-		// TODO: return problem json indicating the error
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	encodedPassword, passwordErr := password.EncodePassword(registerBody.Password, ArgonParameters)
-	if passwordErr != nil {
-		log.Println(passwordErr)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	newUser := User{
-		Slug:        registerBody.Slug,
-		Password:    UserPassword{EncodedHash: encodedPassword},
-		SlugRecords: []UserSlugRecord{{Slug: registerBody.Slug}},
-	}
-
-	if registerBody.Email != nil {
-		newUser.Emails = []UserEmail{{Email: *registerBody.Email}}
-	}
-
-	if registerBody.DisplayName != nil {
-		newUser.DisplayNames = []UserDisplayName{{Name: *registerBody.DisplayName}}
-	}
-
-	result := DB.Create(&newUser)
-	if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
-		return c.SendStatus(fiber.StatusConflict)
-	}
-
-	if result.Error != nil {
-		log.Println(result.Error)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	currentSession.Set("userId", newUser.ID)
-	if saveErr := currentSession.Save(); saveErr != nil {
-		log.Println(saveErr)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	return c.JSON(AuthUserResponse{
-		Slug: newUser.Slug,
-	}, "application/json")
+	return true
 }
 
-func authLogin(c *fiber.Ctx) error {
-	if c.Locals("user") != nil {
-		// we're already authorized!!!
-		return c.Redirect("/")
-	}
+func NewAuth(db *gorm.DB, store *session.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		currentSession, err := store.Get(c)
+		if err != nil {
+			log.Println(err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 
-	currentSession, err := SessionStore.Get(c)
-	if err != nil {
-		log.Println(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
+		sessionUserId := currentSession.Get("userId")
+		if sessionUserId == nil {
+			return c.Next()
+		}
 
-	type LoginDto struct {
-		// Slug is the user's unique username
-		Slug     string `json:"slug" form:"slug"`
-		Password string `json:"password" form:"password"`
-	}
+		var sessionUser User
+		result := db.First(&sessionUser, sessionUserId)
+		if result.Error == nil {
+			c.Locals("user", &sessionUser)
+		}
 
-	var loginBody LoginDto
-	if bodyErr := c.BodyParser(&loginBody); bodyErr != nil {
-		// TODO: return problem json indicating the error
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
+		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			log.Println(result.Error)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
 
-	if !ValidSlug(loginBody.Slug) {
-		// TODO: return problem json indicating the error
-		return c.SendStatus(fiber.StatusBadRequest)
+		return c.Next()
 	}
-
-	if !ValidPassword(loginBody.Password) {
-		// TODO: return problem json indicating the error
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	var matchedUser User
-	result := DB.Preload("Password").First(&matchedUser, "slug = ?", loginBody.Slug)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if result.Error != nil {
-		log.Println(result.Error)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	verifyErr := password.VerifyPassword(loginBody.Password, matchedUser.Password.EncodedHash)
-	if errors.Is(verifyErr, password.ErrHashMismatch) {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if verifyErr != nil {
-		log.Println(verifyErr)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	currentSession.Set("userId", matchedUser.ID)
-	if saveErr := currentSession.Save(); saveErr != nil {
-		log.Println(saveErr)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	return c.Redirect("/")
 }
 
-func authLogout(c *fiber.Ctx) error {
-	currentSession, err := SessionStore.Get(c)
-	if err != nil {
-		log.Println(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
+func NewRequireAuth() fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		user := c.Locals("user")
+		if user == nil {
+			return c.SendStatus(fiber.StatusUnauthorized)
+		}
+
+		if _, isUser := user.(User); !isUser {
+			return c.SendStatus(fiber.StatusUnauthorized)
+		}
+
+		return c.Next()
 	}
-
-	destroyErr := currentSession.Destroy()
-	if destroyErr != nil {
-		log.Println(destroyErr)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	return c.Redirect("/")
-}
-
-func authCreateToken(c *fiber.Ctx) error {
-	return c.SendStatus(fiber.StatusNotFound)
 }
 
 func handleGetLoginView(c *fiber.Ctx) error {
@@ -435,23 +339,6 @@ func SetupAuthRoutes(router fiber.Router) error {
 	// since GET requests MUST be idempotent on fly.io, the logout request must be AJAX
 	rootRoute.Get("/logout", handleGetLogoutView)
 	rootRoute.Post("/logout", handlePostLogoutView)
-
-	return nil
-}
-
-func SetupAuthApi(app fiber.Router) error {
-	if !authSetupComplete {
-		return errors.New("call SetupAuth() before calling SetupAuthApi()")
-	}
-
-	apiGroup := app.Group("/api")
-	apiGroup.Use(AuthHandler)
-	apiGroup.Use([]string{"/auth/user", "/auth/logout"}, RequireAuthHandler)
-	apiGroup.Get("/auth/user", authUser)
-	apiGroup.Post("/auth/register", authRegister)
-	apiGroup.Post("/auth/login", authLogin)
-	apiGroup.Post("/auth/logout", authLogout)
-	apiGroup.Post("/auth/create-token", authCreateToken)
 
 	return nil
 }
