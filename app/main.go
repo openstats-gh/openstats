@@ -1,7 +1,6 @@
 package main
 
 import (
-	"embed"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -36,10 +35,10 @@ var ArgonParameters = password.Parameters{
 
 type RegisterDto struct {
 	// Email is optional, and just used for resetting the user's password
-	Email *string `json:"email,omitempty"`
+	Email string `json:"email,omitempty"`
 
 	// DisplayName is optional, and is only used when displaying their profile on the website
-	DisplayName *string `json:"displayName,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
 
 	// Slug is a unique username for the user
 	Slug string `json:"slug"`
@@ -48,13 +47,14 @@ type RegisterDto struct {
 	Password string `json:"password"`
 }
 
-//go:embed static/*
-var embedDirStatic embed.FS
-
 func main() {
 	if err := SetupDB(); err != nil {
 		log.Fatal(err)
 	}
+
+	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
+	// other admins
+	AddRootAdminUser()
 
 	if err := SetupAuth(); err != nil {
 		log.Fatal(err)
@@ -69,6 +69,7 @@ func main() {
 	})
 
 	app.Use(cors.New())
+
 	// TODO: csrf in local ?
 	//app.Use(csrf.New())
 

@@ -205,6 +205,72 @@ func handleGetRegisterView(c *fiber.Ctx) error {
 	return c.Render("register", nil)
 }
 
+var (
+	ErrInvalidEmailAddress = errors.New("invalid email address")
+	ErrInvalidDisplayName  = errors.New("invalid display name")
+	ErrInvalidSlug         = errors.New("invalid slug")
+	ErrInvalidPassword     = errors.New("invalid password")
+	ErrSlugAlreadyInUse    = errors.New("slug already in use")
+)
+
+func AddNewUser(displayName, email string, slug, pass string) (newUser *User, err error) {
+	if len(email) > 0 {
+		_, emailErr := mail.ParseAddress(email)
+		if emailErr != nil {
+			return nil, ErrInvalidEmailAddress
+		}
+	}
+
+	if len(displayName) > 0 {
+		if !ValidDisplayName(displayName) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return nil, ErrInvalidDisplayName
+		}
+	}
+
+	if !ValidSlug(slug) {
+		return nil, ErrInvalidSlug
+	}
+
+	if !ValidPassword(pass) {
+		return nil, ErrInvalidPassword
+	}
+
+	encodedPassword, passwordErr := password.EncodePassword(pass, ArgonParameters)
+	if passwordErr != nil {
+		log.Println(passwordErr)
+		return nil, passwordErr
+	}
+
+	newUser = &User{
+		Slug:        slug,
+		Password:    UserPassword{EncodedHash: encodedPassword},
+		SlugRecords: []UserSlugRecord{{Slug: slug}},
+	}
+
+	if len(email) > 0 {
+		newUser.Emails = []UserEmail{{Email: email}}
+	}
+
+	if len(displayName) > 0 {
+		newUser.DisplayNames = []UserDisplayName{{Name: displayName}}
+	}
+
+	result := DB.Create(newUser)
+	if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
+		// TODO: redirect to `/register` with conflict info
+		return nil, ErrSlugAlreadyInUse
+	}
+
+	if result.Error != nil {
+		log.Println(result.Error)
+		return nil, result.Error
+	}
+
+	return newUser, nil
+}
+
 func handlePostRegisterView(c *fiber.Ctx) error {
 	if c.Locals("user") != nil {
 		// we're already authorized so we can just go back home
@@ -224,63 +290,37 @@ func handlePostRegisterView(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	if registerBody.Email != nil && len(*registerBody.Email) > 0 {
-		_, emailErr := mail.ParseAddress(*registerBody.Email)
-		if emailErr != nil {
+	newUser, newUserError := AddNewUser(registerBody.DisplayName, registerBody.Email, registerBody.Slug, registerBody.Password)
+	if newUserError != nil {
+		if errors.Is(newUserError, ErrInvalidEmailAddress) {
 			// TODO: return problem json indicating the error
 			// TODO: redirect to `/register` with bad request info
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
-	}
 
-	if registerBody.DisplayName != nil && len(*registerBody.DisplayName) > 0 {
-		if !ValidDisplayName(*registerBody.DisplayName) {
+		if errors.Is(newUserError, ErrInvalidDisplayName) {
 			// TODO: return problem json indicating the error
 			// TODO: redirect to `/register` with bad request info
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
-	}
 
-	if !ValidSlug(registerBody.Slug) {
-		// TODO: return problem json indicating the error
-		// TODO: redirect to `/register` with bad request info
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
+		if errors.Is(newUserError, ErrInvalidSlug) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
 
-	if !ValidPassword(registerBody.Password) {
-		// TODO: return problem json indicating the error
-		// TODO: redirect to `/register` with bad request info
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
+		if errors.Is(newUserError, ErrInvalidPassword) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
 
-	encodedPassword, passwordErr := password.EncodePassword(registerBody.Password, ArgonParameters)
-	if passwordErr != nil {
-		log.Println(passwordErr)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
+		if errors.Is(newUserError, ErrSlugAlreadyInUse) {
+			return c.SendStatus(fiber.StatusConflict)
+		}
 
-	newUser := User{
-		Slug:        registerBody.Slug,
-		Password:    UserPassword{EncodedHash: encodedPassword},
-		SlugRecords: []UserSlugRecord{{Slug: registerBody.Slug}},
-	}
-
-	if registerBody.Email != nil {
-		newUser.Emails = []UserEmail{{Email: *registerBody.Email}}
-	}
-
-	if registerBody.DisplayName != nil {
-		newUser.DisplayNames = []UserDisplayName{{Name: *registerBody.DisplayName}}
-	}
-
-	result := DB.Create(&newUser)
-	if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
-		// TODO: redirect to `/register` with conflict info
-		return c.SendStatus(fiber.StatusConflict)
-	}
-
-	if result.Error != nil {
-		log.Println(result.Error)
+		log.Println(newUserError)
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
