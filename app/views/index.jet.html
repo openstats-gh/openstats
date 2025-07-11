@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>openstats</title>
+</head>
+<body>
+{{ if HasSession }}
+    <p>You're logged in as {{ UserSlug }} </p>
+{{ else }}
+    <p>You are not <a href="/login">logged in</a></p>
+{{ end }}
+</body>
+</html>

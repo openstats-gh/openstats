@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+</head>
+<body>
+    <p>
+        Logging out...
+    </p>
+    <script language="javascript">
+        window.addEventListener("load", _ => {
+            fetch("/logout", {
+                method: "POST",
+                credentials: "same-origin",
+            }).then(_ => {
+                location.href = "/";
+            })
+        });
+    </script>
+</body>
+</html>
