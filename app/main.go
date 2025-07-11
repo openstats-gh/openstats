@@ -1,14 +1,17 @@
 package main
 
 import (
+	"embed"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/favicon"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/gofiber/fiber/v2/middleware/healthcheck"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/template/jet/v2"
 	"log"
+	"net/http"
 	"time"
 )
 
@@ -45,6 +48,9 @@ type RegisterDto struct {
 	Password string `json:"password"`
 }
 
+//go:embed static/*
+var embedDirStatic embed.FS
+
 func main() {
 	if err := SetupDB(); err != nil {
 		log.Fatal(err)
@@ -56,32 +62,34 @@ func main() {
 
 	templateEngine := jet.New("./views", ".jet.html")
 
+	templateEngine.Reload(true)
+
 	app := fiber.New(fiber.Config{
 		Views: templateEngine,
 	})
+
 	app.Use(cors.New())
 	// TODO: csrf in local ?
 	//app.Use(csrf.New())
+
 	app.Use(limiter.New(limiter.Config{
 		Max:               30,
 		Expiration:        30 * time.Second,
 		LimiterMiddleware: limiter.SlidingWindow{},
 	}))
-	app.Use(healthcheck.New())
-	app.Use(favicon.New())
-	app.Use("/", AuthHandler)
-	app.Get("/", func(c *fiber.Ctx) error {
-		userSlug := ""
-		user, userIsUser := c.Locals("user").(*User)
-		if userIsUser {
-			userSlug = user.Slug
-		}
 
-		return c.Render("index", fiber.Map{
-			"HasSession": userIsUser,
-			"UserSlug":   userSlug,
-		})
+	app.Use(healthcheck.New())
+
+	app.Use(favicon.New(favicon.Config{File: "static/favicon.ico"}))
+
+	app.Route("static", func(router fiber.Router) {
+		router.Use(filesystem.New(filesystem.Config{
+			Root: http.Dir("./static"),
+		}))
 	})
+
+	app.Use("/", AuthHandler)
+	app.Get("/", viewHomeGet)
 
 	if err := SetupAuthRoutes(app); err != nil {
 		log.Fatal(err)

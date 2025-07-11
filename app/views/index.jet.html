@@ -1,14 +1,26 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>openstats</title>
-</head>
-<body>
+<!--
+The Home page shows two different views depending on if the user is logged in:
+- a basic recent activity feed (recently acquired achievements)
+- a profile view showing the currently logged in user's recent achievements
+-->
 {{ if HasSession }}
-    <p>You're logged in as {{ UserSlug }} </p>
-{{ else }}
-    <p>You are not <a href="/login">logged in</a></p>
+<section>
+    <h3>Recent achievements unlocked by you!</h3>
+    {{ if len(RecentUserAchievements) == 0 }}
+        <div>You haven't gotten any yet, unlock some and they'll show up here!</div>
+    {{ else }}
+        <ul>
+        {{ range _, achievement := RecentUserAchievements }}
+            <li><a href="#">{{ achievement.Name }}</a> in <a href="#">{{ achievement.GameName }}</a></li>
+        {{ end }}
+        </ul>
+    {{ end }}
+    <hr>
+    <h3>Recent achievements unlocked by other users</h3>
+    <ul>
+        {{ range _, achievement := RecentOtherUserAchievements }}
+        <li><a href="#">{{ achievement.UserName }}</a> unlocked <a href="#">{{ achievement.Name }}</a> in <a href="#">{{ achievement.GameName }}</a></li>
+        {{ end }}
+    </ul>
+</section>
 {{ end }}
-</body>
-</html>

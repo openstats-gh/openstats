@@ -34,7 +34,6 @@ type ImmutableKeylessModel struct {
 type User struct {
 	MutableKeyedModel
 	Slug            string `gorm:"unique"`
-	PasswordId      uint64 `gorm:"<-:create;unique"`
 	Password        UserPassword
 	SlugRecords     []UserSlugRecord
 	Emails          []UserEmail
@@ -105,7 +104,7 @@ type Achievement struct {
 	Slug                string `gorm:"index:idx_game_achievement_slug,unique"`
 	Name                string
 	Description         string
-	ProgressRequirement *uint64
+	ProgressRequirement uint64
 	ProgressRecords     []AchievementProgress
 }
 
