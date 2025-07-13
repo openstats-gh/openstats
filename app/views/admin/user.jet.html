@@ -3,7 +3,9 @@
     <h2>There is no user with the slug '{{ PathSlug }}'</h2>
 {{ else }}
     <h1>User: {{ User.Slug }}</h1>
-    <h3>Display Names</h3>
+
+
+    <h2>Display Names</h2>
     <table>
         <thead>
         <tr>
@@ -16,8 +18,64 @@
         <tr>
             <td>{{ .Name }}</td>
             <td>{{ .CreatedAt }}</td>
-            <td>{{ .DeletedAt }}</td>
+            <td>
+                {{ if .DeletedAt.Valid }}
+                    {{ .DeletedAt.Time }}
+                {{ end }}
+            </td>
         </tr>
         {{ end }}
     </table>
+
+
+    <h2>Emails</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Created At</th>
+            <th>Deleted At</th>
+        </tr>
+        </thead>
+        {{ range User.Emails }}
+        <tr>
+            <td>{{ .Name }}</td>
+            <td>{{ .Slug }}</td>
+            <td>{{ .CreatedAt }}</td>
+            <td>
+                {{ if .DeletedAt.Valid }}
+                    {{ .DeletedAt.Time }}
+                {{ end }}
+            </td>
+        </tr>
+        {{ end }}
+    </table>
+
+
+    <h2>Developers</h2>
+    <table>
+        <thead>
+        <tr>
+            <th>Name</th>
+            <th>Slug</th>
+            <th>Created At</th>
+            <th>Deleted At</th>
+        </tr>
+        </thead>
+        {{ range User.Developers }}
+        <tr>
+            <td><!-- TODO --></td>
+            <td>{{ .Slug }}</td>
+            <td>{{ .CreatedAt }}</td>
+            <td>
+                {{ if .DeletedAt.Valid }}
+                    {{ .DeletedAt.Time }}
+                {{ end }}
+            </td>
+        </tr>
+        {{ end }}
+    </table>
+
+
 {{ end }}

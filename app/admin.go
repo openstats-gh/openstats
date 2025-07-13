@@ -111,20 +111,10 @@ func viewAdminUsersRead(ctx *fiber.Ctx) error {
 	result := DB.Unscoped().
 		Model(&User{}).
 		Preload("DisplayNames").
+		Preload("Developers").
+		Preload("Emails").
 		Where(&User{Slug: slug}).
 		First(&queriedUser)
-
-	//if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-	//	found = false
-	//	ctx.Status(fiber.StatusNotFound)
-	//	return ctx.Render("admin/user", fiber.Map{
-	//		"Title":    "User",
-	//		"NavPages": getAdminPaths(UsersAdminPathGroup),
-	//		"Found":    false,
-	//		"User":     queriedUser,
-	//		"PathSlug": slug,
-	//	}, "layouts/admin")
-	//}
 
 	foundUser := true
 
@@ -155,14 +145,55 @@ func viewAdminUsersDelete(ctx *fiber.Ctx) error {
 }
 
 func viewAdminDevelopersList(ctx *fiber.Ctx) error {
+	var developersList []struct {
+		Slug string
+	}
+
+	result := DB.Model(&Developer{}).
+		Find(&developersList)
+
+	if result.Error != nil {
+		// TODO: handle error
+	}
+
 	return ctx.Render("admin/developers", fiber.Map{
-		"Title":    "Developers",
-		"NavPages": getAdminPaths(DevelopersAdminPathGroup),
+		"Title":      "Developers",
+		"NavPages":   getAdminPaths(DevelopersAdminPathGroup),
+		"Developers": developersList,
 	}, "layouts/admin")
 }
 
 func viewAdminDevelopersRead(ctx *fiber.Ctx) error {
-	return nil
+	slug := ctx.Params("devSlug")
+	if slug == "" || slug == "@" {
+		return ctx.Redirect("/admin/developers")
+	}
+
+	var queriedDeveloper Developer
+	result := DB.Model(&Developer{}).
+		Preload("Members").
+		Preload("Games").
+		Where(&Developer{Slug: slug}).
+		Find(&queriedDeveloper)
+
+	foundDeveloper := true
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			ctx.Status(fiber.StatusNotFound)
+			foundDeveloper = false
+		} else {
+			// TODO: handle error
+		}
+	}
+
+	return ctx.Render("admin/developer", fiber.Map{
+		"Title":     "Developer",
+		"NavPages":  getAdminPaths(DevelopersAdminPathGroup),
+		"Found":     foundDeveloper,
+		"Developer": queriedDeveloper,
+		"PathSlug":  slug,
+	}, "layouts/admin")
 }
 
 func viewAdminDevelopersCreateOrUpdate(ctx *fiber.Ctx) error {
@@ -174,14 +205,68 @@ func viewAdminDevelopersDelete(ctx *fiber.Ctx) error {
 }
 
 func viewAdminGamesList(ctx *fiber.Ctx) error {
+	var gamesList []struct {
+		Slug          string
+		DeveloperSlug string
+	}
+
+	result := DB.Model(&Game{}).
+		Joins("join developers on developers.id = games.developer_id").
+		Select("games.slug, developers.slug as developer_slug").
+		Find(&gamesList)
+
+	if result.Error != nil {
+		// TODO: handle error
+	}
+
 	return ctx.Render("admin/games", fiber.Map{
 		"Title":    "Games",
 		"NavPages": getAdminPaths(GamesAdminPathGroup),
+		"Games":    gamesList,
 	}, "layouts/admin")
 }
 
 func viewAdminGamesRead(ctx *fiber.Ctx) error {
-	return nil
+	devSlug := ctx.Params("devSlug")
+	gameSlug := ctx.Params("gameSlug")
+	if devSlug == "" || devSlug == "@" || gameSlug == "" || gameSlug == "@" {
+		return ctx.Redirect("/admin/developers/@/games")
+	}
+
+	var queriedDeveloper Developer
+	result := DB.Model(&Developer{}).
+		Preload("Games", "slug = ?", gameSlug).
+		Preload("Games.Achievements").
+		Where(&Developer{Slug: devSlug}).
+		Find(&queriedDeveloper)
+
+	foundDeveloper := true
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			ctx.Status(fiber.StatusNotFound)
+			foundDeveloper = false
+		} else {
+			// TODO: handle error
+		}
+	}
+
+	if foundDeveloper && len(queriedDeveloper.Games) != 1 {
+		ctx.Status(fiber.StatusNotFound)
+		foundDeveloper = false
+	}
+
+	return ctx.Render("admin/game", fiber.Map{
+		"Title":    "Game",
+		"NavPages": getAdminPaths(GamesAdminPathGroup),
+		"Found":    foundDeveloper,
+		"Game": fiber.Map{
+			"Slug":          queriedDeveloper.Games[0].Slug,
+			"DeveloperSlug": queriedDeveloper.Slug,
+			"Achievements":  queriedDeveloper.Games[0].Achievements,
+		},
+		"Path": ctx.Path(),
+	}, "layouts/admin")
 }
 
 func viewAdminGamesCreateOrUpdate(ctx *fiber.Ctx) error {
@@ -232,12 +317,12 @@ func SetupAdminViews(router fiber.Router) error {
 	adminGroup.Put("/developers/:devSlug", viewAdminDevelopersCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug", viewAdminDevelopersDelete)
 
-	adminGroup.Get("/developers/:devSlug/games", viewAdminGamesList)
+	adminGroup.Get("/developers/@/games", viewAdminGamesList)
 	adminGroup.Get("/developers/:devSlug/games/:gameSlug", viewAdminGamesRead)
 	adminGroup.Put("/developers/:devSlug/games/:gameSlug", viewAdminGamesCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug/games/:gameSlug", viewAdminGamesDelete)
 
-	adminGroup.Get("/developers/:devSlug/games/:gameSlug/achievements", viewAdminGameAchievementsList)
+	adminGroup.Get("/developers/@/games/@/achievements", viewAdminGameAchievementsList)
 	adminGroup.Get("/developers/:devSlug/games/:gameSlug/achievements/:achievementSlug", viewAdminGameAchievementsRead)
 	adminGroup.Put("/developers/:devSlug/games/:gameSlug/achievements/:achievementSlug", viewAdminGameAchievementsCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug/games/:gameSlug/achievements/:achievementSlug", viewAdminGameAchievementsDelete)

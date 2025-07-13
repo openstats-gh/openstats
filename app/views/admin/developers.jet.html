@@ -1,1 +1,18 @@
 <h1>Developers</h1>
+
+<table>
+    <thead>
+    <tr>
+        <th>Display Name</th>
+        <th>Slug</th>
+    </tr>
+    </thead>
+    {{ range Developers }}
+    <tr>
+        <td><!-- TODO --></td>
+        <td>
+            <a href="/admin/developers/{{ .Slug }}">{{ .Slug }}</a>
+        </td>
+    </tr>
+    {{ end }}
+</table>

@@ -1,0 +1,25 @@
+{{ if !Found }}
+    <h1>Developer Not Found</h1>
+    <h2>There is no developer with the slug '{{ PathSlug }}'</h2>
+{{ else }}
+    <h1>Developer: {{ Developer.Slug }}</h1>
+
+    <h2>Members</h2>
+    <table>
+        {{ range Developer.Members }}
+            <tr>
+                <td><a href="/admin/users/{{ .Slug }}">{{ .Slug }}</a></td>
+            </tr>
+        {{ end }}
+    </table>
+
+    <h2>Games</h2>
+    <table>
+        {{ range Developer.Games }}
+        <tr>
+            <td><a href="/admin/developers/{{ Developer.Slug }}/games/{{ .Slug }}">{{ .Slug }}</a></td>
+        </tr>
+        {{ end }}
+    </table>
+
+{{ end }}
