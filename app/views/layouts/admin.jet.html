@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ Title }}</title>
+    <link rel="shortcut icon" href="/static/favicon.ico">
+    <link rel="stylesheet" href="/static/dashboard.css">
+</head>
+<body>
+    <nav class="sidebar">
+        {{ range NavPages }}
+            {{ if .IsCurrent }}
+                <a class="active" href="{{ .Path }}">{{ .Name }}</a>
+            {{ else }}
+                <a href="{{ .Path }}">{{ .Name }}</a>
+            {{ end }}
+        {{ end }}
+    </nav>
+    <main role="main">
+        {{ embed() }}
+    </main>
+</body>
+</html>

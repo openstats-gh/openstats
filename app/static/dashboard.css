@@ -1,0 +1,85 @@
+:root {
+    --color: whitesmoke;
+    --body-background: #111;
+    --content-background: #111;
+    --link-color: #13b8eb;
+    --row-modifier: white;
+    --branding-background: #b0b;
+    --branding-color: #fff;
+}
+
+body {
+    background-color: var(--body-background);
+    color: var(--color);
+}
+
+body a {
+    color: var(--branding-background);
+}
+
+body a:visited {
+    color: var(--branding-background);
+}
+
+body a:hover {
+    color: var(--branding-background);
+}
+
+body a:active {
+    color: var(--branding-background);
+}
+
+nav.sidebar {
+    margin: 0;
+    padding: 0;
+    width: 200px;
+    background-color: #f1f1f1;
+    position: fixed;
+    height: 100%;
+    overflow: auto;
+}
+
+nav.sidebar a {
+    display: block;
+    color: black;
+    padding: 16px;
+    text-decoration: none;
+    text-align: right;
+}
+
+nav.sidebar a.active {
+    background-color: #04AA6D;
+    color: white;
+}
+
+.sidebar a:hover:not(.active) {
+    background-color: #555;
+    color: white;
+}
+
+main {
+    margin-left: 200px;
+    padding: 1px 16px;
+    height: 1000px;
+}
+
+@media screen and (max-width: 700px) {
+    nav.sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    nav.sidebar a {
+        float: left;
+    }
+    main {
+        margin-left: 0;
+    }
+}
+
+@media screen and (max-width: 400px) {
+    nav.sidebar a {
+        text-align: center;
+        float: none;
+    }
+}

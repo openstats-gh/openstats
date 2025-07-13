@@ -16,9 +16,62 @@ import (
 )
 
 var AuthHandler fiber.Handler
-var RequireAuthHandler fiber.Handler
 var SessionStore *session.Store
 var authSetupComplete = false
+
+func NewAuthHandler(db *gorm.DB, store *session.Store) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		currentSession, err := store.Get(c)
+		if err != nil {
+			log.Println(err)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		sessionUserId := currentSession.Get("userId")
+		if sessionUserId == nil {
+			return c.Next()
+		}
+
+		var sessionUser User
+		result := db.First(&sessionUser, sessionUserId)
+		if result.Error == nil {
+			c.Locals("user", &sessionUser)
+		}
+
+		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			log.Println(result.Error)
+			return c.SendStatus(fiber.StatusInternalServerError)
+		}
+
+		return c.Next()
+	}
+}
+
+func RequireAuthHandler(c *fiber.Ctx) error {
+	user := c.Locals("user")
+	if user == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	if _, isUser := user.(*User); !isUser {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	return c.Next()
+}
+
+func RequireAdminAuthHandler(c *fiber.Ctx) error {
+	userLocal := c.Locals("user")
+	if userLocal == nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	if user, isUser := userLocal.(*User); !isUser || !IsAdmin(user) {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	return c.Next()
+}
 
 func SetupAuth() error {
 	if DB == nil {
@@ -32,8 +85,7 @@ func SetupAuth() error {
 		KeyGenerator: utils.UUIDv4,
 	})
 
-	AuthHandler = NewAuth(DB, SessionStore)
-	RequireAuthHandler = NewRequireAuth()
+	AuthHandler = NewAuthHandler(DB, SessionStore)
 
 	authSetupComplete = true
 	return nil
@@ -76,49 +128,6 @@ func ValidPassword(password string) bool {
 	}
 
 	return true
-}
-
-func NewAuth(db *gorm.DB, store *session.Store) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		currentSession, err := store.Get(c)
-		if err != nil {
-			log.Println(err)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-
-		sessionUserId := currentSession.Get("userId")
-		if sessionUserId == nil {
-			return c.Next()
-		}
-
-		var sessionUser User
-		result := db.First(&sessionUser, sessionUserId)
-		if result.Error == nil {
-			c.Locals("user", &sessionUser)
-		}
-
-		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println(result.Error)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-
-		return c.Next()
-	}
-}
-
-func NewRequireAuth() fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		user := c.Locals("user")
-		if user == nil {
-			return c.SendStatus(fiber.StatusUnauthorized)
-		}
-
-		if _, isUser := user.(User); !isUser {
-			return c.SendStatus(fiber.StatusUnauthorized)
-		}
-
-		return c.Next()
-	}
 }
 
 func handleGetLoginView(c *fiber.Ctx) error {

@@ -96,6 +96,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := SetupAdminViews(app); err != nil {
+		log.Fatal(err)
+	}
+
 	//if err := SetupAuthApi(app); err != nil {
 	//	log.Fatal(err)
 	//}
