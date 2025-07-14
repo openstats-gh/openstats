@@ -278,7 +278,57 @@ func viewAdminGamesDelete(ctx *fiber.Ctx) error {
 }
 
 func viewAdminGameAchievementsRead(ctx *fiber.Ctx) error {
-	return nil
+	devSlug := ctx.Params("devSlug")
+	gameSlug := ctx.Params("gameSlug")
+	achievementSlug := ctx.Params("achievementSlug")
+	if devSlug == "" || devSlug == "@" || gameSlug == "" || gameSlug == "@" || achievementSlug == "" || achievementSlug == "@" {
+		return ctx.Redirect("/admin/developers/@/games")
+	}
+
+	var queriedDeveloper Developer
+	result := DB.Model(&Developer{}).
+		Preload("Games", "slug = ?", gameSlug).
+		Preload("Games.Achievements", "slug = ?", achievementSlug).
+		Where(&Developer{Slug: devSlug}).
+		Find(&queriedDeveloper)
+
+	foundAchievement := true
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			ctx.Status(fiber.StatusNotFound)
+			foundAchievement = false
+		} else {
+			// TODO: handle error
+		}
+	}
+
+	if foundAchievement && (len(queriedDeveloper.Games) != 1 || len(queriedDeveloper.Games[0].Achievements) != 1) {
+		ctx.Status(fiber.StatusNotFound)
+		foundAchievement = false
+	}
+
+	developerPath, devRouteErr := ctx.GetRouteURL("readDeveloper", fiber.Map{"devSlug": devSlug})
+	if devRouteErr != nil {
+		// TODO: handle error
+	}
+
+	gamePath, gameRouteErr := ctx.GetRouteURL("readGame", fiber.Map{"devSlug": devSlug, "gameSlug": gameSlug})
+	if gameRouteErr != nil {
+		// TODO: handle error
+	}
+
+	return ctx.Render("admin/achievement", fiber.Map{
+		"Title":         "Achievement",
+		"NavPages":      getAdminPaths(GamesAdminPathGroup),
+		"Found":         foundAchievement,
+		"Path":          ctx.Path(),
+		"DeveloperPath": developerPath,
+		"GamePath":      gamePath,
+		"DeveloperSlug": devSlug,
+		"GameSlug":      gameSlug,
+		"Developer":     queriedDeveloper,
+	}, "layouts/admin")
 }
 
 func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
