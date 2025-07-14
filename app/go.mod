@@ -1,6 +1,6 @@
 module github.com/dresswithpockets/openstats/app
 
-go 1.24.4
+go 1.24
 
 require (
 	github.com/gofiber/fiber/v2 v2.52.8
@@ -31,6 +31,6 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.26.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/text v0.27.0 // indirect
 )
