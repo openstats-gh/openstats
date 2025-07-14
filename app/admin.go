@@ -277,13 +277,6 @@ func viewAdminGamesDelete(ctx *fiber.Ctx) error {
 	return nil
 }
 
-func viewAdminGameAchievementsList(ctx *fiber.Ctx) error {
-	return ctx.Render("admin/achievements", fiber.Map{
-		"Title":    "Achievements",
-		"NavPages": getAdminPaths(GamesAdminPathGroup),
-	}, "layouts/admin")
-}
-
 func viewAdminGameAchievementsRead(ctx *fiber.Ctx) error {
 	return nil
 }
@@ -322,7 +315,6 @@ func SetupAdminViews(router fiber.Router) error {
 	adminGroup.Put("/developers/:devSlug/games/:gameSlug", viewAdminGamesCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug/games/:gameSlug", viewAdminGamesDelete)
 
-	adminGroup.Get("/developers/@/games/@/achievements", viewAdminGameAchievementsList)
 	adminGroup.Get("/developers/:devSlug/games/:gameSlug/achievements/:achievementSlug", viewAdminGameAchievementsRead)
 	adminGroup.Put("/developers/:devSlug/games/:gameSlug/achievements/:achievementSlug", viewAdminGameAchievementsCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug/games/:gameSlug/achievements/:achievementSlug", viewAdminGameAchievementsDelete)
