@@ -1,0 +1,24 @@
+<!--
+	Slug                string `gorm:"index:idx_game_achievement_slug,unique"`
+	Name                string
+	Description         string
+	ProgressRequirement uint64
+-->
+
+{{ if !Found }}
+    <h1>Achievement Not Found</h1>
+    <h2>There is no achievement at the path '{{ Path }}'</h2>
+{{ else }}
+    {{ achievement := Developer.Games[0].Achievements[0] }}
+    <div>
+        <a href="/admin">admin</a> > <a href="{{ DeveloperPath }}">{{ DeveloperSlug }}</a> > <a href="{{ GamePath }}">{{ GameSlug }}</a> > {{ achievement.Slug }}
+    </div>
+
+    <h1>Achievement: {{ achievement.Slug }}</h1>
+    <div>
+        Description: {{ achievement.Description }}
+    </div>
+    <div>
+        Progress Requirement: {{ achievement.ProgressRequirement }}
+    </div>
+{{ end }}

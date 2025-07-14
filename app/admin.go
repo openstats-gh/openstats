@@ -313,12 +313,12 @@ func SetupAdminViews(router fiber.Router) error {
 	adminGroup.Delete("/users/:slug", viewAdminUsersDelete)
 
 	adminGroup.Get("/developers", viewAdminDevelopersList)
-	adminGroup.Get("/developers/:devSlug", viewAdminDevelopersRead)
+	adminGroup.Get("/developers/:devSlug", viewAdminDevelopersRead).Name("readDeveloper")
 	adminGroup.Put("/developers/:devSlug", viewAdminDevelopersCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug", viewAdminDevelopersDelete)
 
 	adminGroup.Get("/developers/@/games", viewAdminGamesList)
-	adminGroup.Get("/developers/:devSlug/games/:gameSlug", viewAdminGamesRead)
+	adminGroup.Get("/developers/:devSlug/games/:gameSlug", viewAdminGamesRead).Name("readGame")
 	adminGroup.Put("/developers/:devSlug/games/:gameSlug", viewAdminGamesCreateOrUpdate)
 	adminGroup.Delete("/developers/:devSlug/games/:gameSlug", viewAdminGamesDelete)
 
