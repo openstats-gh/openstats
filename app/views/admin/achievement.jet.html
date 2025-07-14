@@ -1,10 +1,3 @@
-<!--
-	Slug                string `gorm:"index:idx_game_achievement_slug,unique"`
-	Name                string
-	Description         string
-	ProgressRequirement uint64
--->
-
 {{ if !Found }}
     <h1>Achievement Not Found</h1>
     <h2>There is no achievement at the path '{{ Path }}'</h2>
@@ -16,9 +9,78 @@
 
     <h1>Achievement: {{ achievement.Slug }}</h1>
     <div>
-        Description: {{ achievement.Description }}
+        <label for="description">Description:</label>
+        <input type="text" id="description" name="description" value="{{ achievement.Description }}" />
     </div>
     <div>
-        Progress Requirement: {{ achievement.ProgressRequirement }}
+
+        <label for="requirement">Progress Requirement:</label>
+        <input type="number" id="requirement" name="requirement" value="{{ achievement.ProgressRequirement }}" />
     </div>
+    <div>
+        <button id="save" type="button">Save</button>
+        <button id="cancel" type="button">Cancel</button>
+    </div>
+
+    <script type="text/javascript">
+        window.onload = function() {
+            const description = document.getElementById("description")
+            const requirement = document.getElementById("requirement")
+            const saveButton = document.getElementById("save")
+            const cancelButton = document.getElementById("cancel")
+
+            saveButton.onclick = async function() {
+                saveButton.disabled = true
+                cancelButton.disabled = true
+
+                if (description.value === "{{ achievement.Description }}" && requirement.value === "{{ achievement.ProgressRequirement }}") {
+                    saveButton.disabled = false
+                    cancelButton.disabled = false
+                    return
+                }
+
+                const request = {
+                    method: "PUT",
+                    headers: {
+                        "content-type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        description: description.value,
+                        progressRequirement: parseInt(requirement.value),
+                    }),
+                    credentials: "same-origin",
+                    mode: "same-origin",
+                }
+
+                try {
+                    const result = await fetch("{{ Path }}", request);
+                    if (!result.ok) {
+                        alert("An error occurred while updating the achievement")
+                        saveButton.disabled = false
+                        cancelButton.disabled = false
+                        return
+                    }
+
+                    if (result.status === 201) {
+                        alert("Warning: a new achievement was created, instead of this one being updated")
+                    } else if (result.status === 200) {
+                        alert("Achievement successfully updated")
+                    } else {
+                        alert("Unexpected result status: " + result.status)
+                    }
+
+                    window.location.reload()
+                } catch (error) {
+                    alert("An error occurred while updating the achievement")
+                    saveButton.disabled = false
+                    cancelButton.disabled = false
+                }
+            }
+
+            cancelButton.onclick = function() {
+                description.value = "{{ achievement.Description }}"
+                requirement.value = "{{ achievement.ProgressRequirement }}"
+            }
+        }
+    </script>
 {{ end }}

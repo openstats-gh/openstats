@@ -332,7 +332,71 @@ func viewAdminGameAchievementsRead(ctx *fiber.Ctx) error {
 }
 
 func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
-	return nil
+	devSlug := ctx.Params("devSlug")
+	gameSlug := ctx.Params("gameSlug")
+	achievementSlug := ctx.Params("achievementSlug")
+	if devSlug == "" || devSlug == "@" || gameSlug == "" || gameSlug == "@" || achievementSlug == "" || achievementSlug == "@" {
+		return ctx.Redirect("/admin/developers/@/games")
+	}
+
+	var request struct {
+		Description         string `json:"description"`
+		ProgressRequirement uint64 `json:"progressRequirement"`
+	}
+
+	if bodyErr := ctx.BodyParser(&request); bodyErr != nil {
+		return ctx.SendStatus(fiber.StatusBadRequest)
+	}
+
+	if request.ProgressRequirement < 0 {
+		return ctx.SendStatus(fiber.StatusBadRequest)
+	}
+
+	var queriedDeveloper Developer
+	result := DB.Model(&Developer{}).
+		Preload("Games", "slug = ?", gameSlug).
+		Find(&queriedDeveloper, "slug = ?", devSlug)
+
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return ctx.SendStatus(fiber.StatusNotFound)
+	}
+
+	if result.Error != nil {
+		log.Error(result.Error)
+		return ctx.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	if len(queriedDeveloper.Games) != 1 {
+		return ctx.SendStatus(fiber.StatusNotFound)
+	}
+
+	var achievement Achievement
+	result = DB.Find(&achievement, "slug = ?", achievementSlug)
+	if result.Error != nil {
+		log.Error(result.Error)
+		return ctx.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	isNew := achievement.ID == 0
+	achievement.Slug = achievementSlug
+	achievement.Description = request.Description
+	achievement.ProgressRequirement = uint64(request.ProgressRequirement)
+
+	result = DB.Select("*").Save(&achievement)
+	if result.Error != nil {
+		log.Error(result.Error)
+		return ctx.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	if isNew {
+		newLocation, routeErr := ctx.GetRouteURL("readAchievement", fiber.Map{"devSlug": devSlug, "gameSlug": gameSlug, "achievementSlug": achievementSlug})
+		if routeErr == nil {
+			ctx.Location(newLocation)
+		}
+		return ctx.SendStatus(fiber.StatusCreated)
+	}
+
+	return ctx.SendStatus(fiber.StatusOK)
 }
 
 func viewAdminGameAchievementsDelete(ctx *fiber.Ctx) error {
