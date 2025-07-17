@@ -21,7 +21,7 @@ func viewHomeGet(c *fiber.Ctx) error {
 	if userIsUser {
 		userSlug = user.Slug
 
-		result := DB.Table("achievement_progresses as ap").
+		result := GormDB.Table("achievement_progresses as ap").
 			Select("a.name, g.slug as game_name").
 			Joins("join achievements a on ap.achievement_id = a.id").
 			Joins("join users u on ap.user_id = u.id").
@@ -35,7 +35,7 @@ func viewHomeGet(c *fiber.Ctx) error {
 			// TODO: show error in the view
 		}
 
-		result = DB.Table("achievement_progresses as ap").
+		result = GormDB.Table("achievement_progresses as ap").
 			Select("u.slug as user_name, a.name, g.slug as game_name").
 			Joins("join achievements a on ap.achievement_id = a.id").
 			Joins("join users u on ap.user_id = u.id").
@@ -50,7 +50,7 @@ func viewHomeGet(c *fiber.Ctx) error {
 		}
 
 		/*
-			result := DB.Model(&User{}).
+			result := GormDB.Model(&User{}).
 			Select("users.slug, udn.name as display_name").
 			Joins("left outer joins user_display_names udn on users.id = udn.user_id").
 			Where(&User{Slug: slug}).

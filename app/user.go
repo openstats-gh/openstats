@@ -23,7 +23,7 @@ func userGetUser(c *fiber.Ctx) error {
 	}
 
 	var response GetUserResponse
-	result := DB.Model(&User{}).
+	result := GormDB.Model(&User{}).
 		Select("users.slug, udn.name as display_name").
 		Joins("left outer joins user_display_names udn on users.id = udn.user_id").
 		Where(&User{Slug: slug}).

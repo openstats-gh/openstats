@@ -1,0 +1,13 @@
+wipe: true
+sql:
+  dialect: sqlite
+  pattern: "migrations/*.up.sql"
+  queries:
+    - ./queries
+
+replacements:
+  - match:
+      name: "id"
+      db_type: "integer"
+      nullable: false
+    replace: "int64"

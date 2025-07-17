@@ -1,12 +1,18 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"github.com/dresswithpockets/openstats/app/models"
 	"github.com/dresswithpockets/openstats/app/password"
+	"github.com/dresswithpockets/openstats/app/queries"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/fiber/v2/utils"
 	sqliteStorage "github.com/gofiber/storage/sqlite3/v2"
+	"github.com/stephenafamo/bob"
+	"github.com/stephenafamo/bob/dialect/sqlite/sm"
+	"github.com/stephenafamo/bob/orm"
 	"gorm.io/gorm"
 	"log"
 	"net/mail"
@@ -15,45 +21,41 @@ import (
 	"unicode"
 )
 
-var AuthHandler fiber.Handler
-var SessionStore *session.Store
-var authSetupComplete = false
+var SessionStore = session.New(session.Config{
+	Expiration:   7 * 24 * time.Hour,
+	Storage:      sqliteStorage.New(sqliteStorage.Config{}),
+	CookieSecure: true,
+	KeyGenerator: utils.UUIDv4,
+})
 
-func NewAuthHandler(db *gorm.DB, store *session.Store) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		currentSession, err := store.Get(c)
-		if err != nil {
-			log.Println(err)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
+func AuthHandler(c *fiber.Ctx) error {
+	currentSession, err := SessionStore.Get(c)
+	if err != nil {
+		log.Println(err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
 
-		sessionUserId := currentSession.Get("userId")
-		if sessionUserId == nil {
+	sessionUserId, isInt := currentSession.Get("userId").(int32)
+	if !isInt {
+		return c.Next()
+	}
+
+	sessionUser, findUserErr := models.FindUser(c.Context(), DB, sessionUserId)
+	if findUserErr != nil {
+		if errors.Is(findUserErr, orm.ErrCannotRetrieveRow) {
 			return c.Next()
 		}
 
-		var sessionUser User
-		result := db.First(&sessionUser, sessionUserId)
-		if result.Error == nil {
-			c.Locals("user", &sessionUser)
-		}
-
-		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println(result.Error)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-
-		return c.Next()
+		log.Println(findUserErr)
+		return c.SendStatus(fiber.StatusInternalServerError)
 	}
+
+	LocalSetUser(c, sessionUser)
+	return c.Next()
 }
 
 func RequireAuthHandler(c *fiber.Ctx) error {
-	user := c.Locals("user")
-	if user == nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	if _, isUser := user.(*User); !isUser {
+	if _, err := LocalGetUser(c); err != nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -61,34 +63,12 @@ func RequireAuthHandler(c *fiber.Ctx) error {
 }
 
 func RequireAdminAuthHandler(c *fiber.Ctx) error {
-	userLocal := c.Locals("user")
-	if userLocal == nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if user, isUser := userLocal.(*User); !isUser || !IsAdmin(user) {
-		return c.SendStatus(fiber.StatusNotFound)
+	user, err := LocalGetUser(c)
+	if err != nil || !IsAdmin(user) {
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	return c.Next()
-}
-
-func SetupAuth() error {
-	if DB == nil {
-		return errors.New("DB not initialized")
-	}
-
-	SessionStore = session.New(session.Config{
-		Expiration:   7 * 24 * time.Hour,
-		Storage:      sqliteStorage.New(sqliteStorage.Config{}),
-		CookieSecure: true,
-		KeyGenerator: utils.UUIDv4,
-	})
-
-	AuthHandler = NewAuthHandler(DB, SessionStore)
-
-	authSetupComplete = true
-	return nil
 }
 
 func ValidDisplayName(displayName string) bool {
@@ -172,8 +152,10 @@ func handlePostLoginView(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
+	models.UserPasswords.Query(models.Preload.UserPassword.User())
+
 	var matchedUser User
-	result := DB.Preload("Password").First(&matchedUser, "slug = ?", loginBody.Slug)
+	result := GormDB.Preload("Password").First(&matchedUser, "slug = ?", loginBody.Slug)
 	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		// TODO: redirect to `/login` with username not found or password doesnt match
 		return c.SendStatus(fiber.StatusNotFound)
@@ -266,7 +248,7 @@ func AddNewUser(displayName, email string, slug, pass string) (newUser *User, er
 		newUser.DisplayNames = []UserDisplayName{{Name: displayName}}
 	}
 
-	result := DB.Create(newUser)
+	result := GormDB.Create(newUser)
 	if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
 		// TODO: redirect to `/register` with conflict info
 		return nil, ErrSlugAlreadyInUse

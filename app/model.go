@@ -2,7 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"gorm.io/driver/sqlite"
+	"github.com/stephenafamo/bob"
 	"gorm.io/gorm"
 	"time"
 )
@@ -115,42 +115,14 @@ type AchievementProgress struct {
 	Progress      uint64 `gorm:"index"`
 }
 
-var DB *gorm.DB
+var DB bob.DB
 
 func SetupDB() error {
-	db, dbErr := gorm.Open(sqlite.Open("openstats.db"), &gorm.Config{
-		TranslateError: true,
-	})
+	db, dbErr := sql.Open("sqlite3", "openstats.db")
 	if dbErr != nil {
 		return dbErr
 	}
 
-	setupErr := db.SetupJoinTable(&User{}, "Developers", &DeveloperMember{})
-	if setupErr != nil {
-		return setupErr
-	}
-
-	setupErr = db.SetupJoinTable(&Developer{}, "Members", &DeveloperMember{})
-	if setupErr != nil {
-		return setupErr
-	}
-
-	migrateErr := db.AutoMigrate(
-		&User{},
-		&UserPassword{},
-		&UserEmail{},
-		&UserSlugRecord{},
-		&UserDisplayName{},
-		&Developer{},
-		&DeveloperSlugRecord{},
-		&Game{},
-		&Achievement{},
-		&AchievementProgress{},
-	)
-	if migrateErr != nil {
-		return migrateErr
-	}
-
-	DB = db
+	DB = bob.NewDB(db)
 	return nil
 }

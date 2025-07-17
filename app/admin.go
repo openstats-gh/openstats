@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"github.com/dresswithpockets/openstats/app/models"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 	"gorm.io/gorm"
@@ -23,7 +24,7 @@ func AddRootAdminUser() {
 	}
 }
 
-func IsAdmin(user *User) bool {
+func IsAdmin(user *models.User) bool {
 	// TODO: add distinction between Admin and Root - Root should be able to add non-root Admin users, which can do
 	//       everything except add other Admins
 	return user != nil && user.Slug == RootUserSlug
@@ -83,7 +84,7 @@ func viewAdminUsersList(ctx *fiber.Ctx) error {
 	var usersList []UsersList
 
 	// gets every user's slug and their most recent display name
-	result := DB.Table("users as u").
+	result := GormDB.Table("users as u").
 		Select("u.slug, udn1.name").
 		Joins("join user_display_names udn1 on u.id = udn1.user_id and udn1.deleted_at is null").
 		Joins("left outer join user_display_names udn2 on u.id = udn2.user_id and udn2.deleted_at is null and (udn1.created_at < udn2.created_at OR (udn1.created_at = udn2.created_at and udn1.id < udn2.id))").
@@ -108,7 +109,7 @@ func viewAdminUsersRead(ctx *fiber.Ctx) error {
 	}
 
 	var queriedUser User
-	result := DB.Unscoped().
+	result := GormDB.Unscoped().
 		Model(&User{}).
 		Preload("DisplayNames").
 		Preload("Developers").
@@ -149,7 +150,7 @@ func viewAdminDevelopersList(ctx *fiber.Ctx) error {
 		Slug string
 	}
 
-	result := DB.Model(&Developer{}).
+	result := GormDB.Model(&Developer{}).
 		Find(&developersList)
 
 	if result.Error != nil {
@@ -170,7 +171,7 @@ func viewAdminDevelopersRead(ctx *fiber.Ctx) error {
 	}
 
 	var queriedDeveloper Developer
-	result := DB.Model(&Developer{}).
+	result := GormDB.Model(&Developer{}).
 		Preload("Members").
 		Preload("Games").
 		Where(&Developer{Slug: slug}).
@@ -210,7 +211,7 @@ func viewAdminGamesList(ctx *fiber.Ctx) error {
 		DeveloperSlug string
 	}
 
-	result := DB.Model(&Game{}).
+	result := GormDB.Model(&Game{}).
 		Joins("join developers on developers.id = games.developer_id").
 		Select("games.slug, developers.slug as developer_slug").
 		Find(&gamesList)
@@ -234,7 +235,7 @@ func viewAdminGamesRead(ctx *fiber.Ctx) error {
 	}
 
 	var queriedDeveloper Developer
-	result := DB.Model(&Developer{}).
+	result := GormDB.Model(&Developer{}).
 		Preload("Games", "slug = ?", gameSlug).
 		Preload("Games.Achievements").
 		Where(&Developer{Slug: devSlug}).
@@ -286,7 +287,7 @@ func viewAdminGameAchievementsRead(ctx *fiber.Ctx) error {
 	}
 
 	var queriedDeveloper Developer
-	result := DB.Model(&Developer{}).
+	result := GormDB.Model(&Developer{}).
 		Preload("Games", "slug = ?", gameSlug).
 		Preload("Games.Achievements", "slug = ?", achievementSlug).
 		Where(&Developer{Slug: devSlug}).
@@ -353,7 +354,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 	}
 
 	var queriedDeveloper Developer
-	result := DB.Model(&Developer{}).
+	result := GormDB.Model(&Developer{}).
 		Preload("Games", "slug = ?", gameSlug).
 		Find(&queriedDeveloper, "slug = ?", devSlug)
 
@@ -371,7 +372,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 	}
 
 	var achievement Achievement
-	result = DB.Find(&achievement, "slug = ?", achievementSlug)
+	result = GormDB.Find(&achievement, "slug = ?", achievementSlug)
 	if result.Error != nil {
 		log.Error(result.Error)
 		return ctx.SendStatus(fiber.StatusInternalServerError)
@@ -382,7 +383,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 	achievement.Description = request.Description
 	achievement.ProgressRequirement = uint64(request.ProgressRequirement)
 
-	result = DB.Select("*").Save(&achievement)
+	result = GormDB.Select("*").Save(&achievement)
 	if result.Error != nil {
 		log.Error(result.Error)
 		return ctx.SendStatus(fiber.StatusInternalServerError)
