@@ -1,69 +1,42 @@
 package main
 
-import "github.com/gofiber/fiber/v2"
+import (
+	"github.com/dresswithpockets/openstats/app/query"
+	"github.com/gofiber/fiber/v2"
+)
 
 func viewHomeGet(c *fiber.Ctx) error {
-	type RecentUserAchievement struct {
-		Name     string
-		GameName string
-	}
-
-	type RecentOtherUserAchievement struct {
-		UserName string
-		Name     string
-		GameName string
-	}
-
+	user, hasUser := Locals.User.Get(c)
 	userSlug := ""
-	user, userIsUser := c.Locals("user").(*User)
-	var recentUserAchievements []RecentUserAchievement
-	var recentOtherUserAchievements []RecentOtherUserAchievement
-	if userIsUser {
+	var recentUserAchievements []query.GetUserRecentAchievementsRow
+	var recentOtherUserAchievements []query.GetOtherUserRecentAchievementsRow
+	if hasUser {
 		userSlug = user.Slug
 
-		result := GormDB.Table("achievement_progresses as ap").
-			Select("a.name, g.slug as game_name").
-			Joins("join achievements a on ap.achievement_id = a.id").
-			Joins("join users u on ap.user_id = u.id").
-			Joins("join games g on a.game_id = g.id").
-			Where("u.id = ? and ap.progress = a.progress_requirement", user.ID).
-			Order("ap.created_at desc").
-			Limit(20).
-			Find(&recentUserAchievements)
+		var err error
+		recentUserAchievements, err = Queries.GetUserRecentAchievements(c.Context(), query.GetUserRecentAchievementsParams{
+			UserID: user.ID,
+			Limit:  20,
+		})
 
-		if result.Error != nil {
+		if err != nil {
 			// TODO: show error in the view
 		}
 
-		result = GormDB.Table("achievement_progresses as ap").
-			Select("u.slug as user_name, a.name, g.slug as game_name").
-			Joins("join achievements a on ap.achievement_id = a.id").
-			Joins("join users u on ap.user_id = u.id").
-			Joins("join games g on a.game_id = g.id").
-			Where("u.id != ? and ap.progress = a.progress_requirement", user.ID).
-			Order("ap.created_at desc").
-			Limit(20).
-			Find(&recentOtherUserAchievements)
+		recentOtherUserAchievements, err = Queries.GetOtherUserRecentAchievements(c.Context(), query.GetOtherUserRecentAchievementsParams{
+			UserID: user.ID,
+			Limit:  20,
+		})
 
-		if result.Error != nil {
+		if err != nil {
 			// TODO: show error in the view
 		}
-
-		/*
-			result := GormDB.Model(&User{}).
-			Select("users.slug, udn.name as display_name").
-			Joins("left outer joins user_display_names udn on users.id = udn.user_id").
-			Where(&User{Slug: slug}).
-			Order("udn.name desc").
-			Limit(1).
-			Scan(&response)
-		*/
 	}
 
 	return c.Render("index", fiber.Map{
 		"Title":                       "openstats",
 		"CurrentPath":                 "home",
-		"HasSession":                  userIsUser,
+		"HasSession":                  hasUser,
 		"UserSlug":                    userSlug,
 		"RecentUserAchievements":      recentUserAchievements,
 		"RecentOtherUserAchievements": recentOtherUserAchievements,

@@ -2,20 +2,23 @@
     <h1>Achievement Not Found</h1>
     <h2>There is no achievement at the path '{{ Path }}'</h2>
 {{ else }}
-    {{ achievement := Developer.Games[0].Achievements[0] }}
     <div>
-        <a href="/admin">admin</a> > <a href="{{ DeveloperPath }}">{{ DeveloperSlug }}</a> > <a href="{{ GamePath }}">{{ GameSlug }}</a> > {{ achievement.Slug }}
+        <a href="/admin">admin</a> > <a href="{{ Model.DeveloperPath }}">{{ Model.DeveloperPath }}</a> > <a href="{{ Model.GamePath }}">{{ Model.GameSlug }}</a> > {{ Model.Achievement.Slug }}
     </div>
 
-    <h1>Achievement: {{ achievement.Slug }}</h1>
+    <h1>Achievement: {{ Model.Achievement.Slug }}</h1>
+    <div>
+        <label for="name">Name:</label>
+        <input type="text" id="name" name="name" value="{{ Model.Achievement.Name }}" />
+    </div>
     <div>
         <label for="description">Description:</label>
-        <input type="text" id="description" name="description" value="{{ achievement.Description }}" />
+        <input type="text" id="description" name="description" value="{{ Model.Achievement.Description }}" />
     </div>
     <div>
 
         <label for="requirement">Progress Requirement:</label>
-        <input type="number" id="requirement" name="requirement" value="{{ achievement.ProgressRequirement }}" />
+        <input type="number" id="requirement" name="requirement" value="{{ Model.Achievement.ProgressRequirement }}" />
     </div>
     <div>
         <button id="save" type="button">Save</button>
@@ -24,6 +27,7 @@
 
     <script type="text/javascript">
         window.onload = function() {
+            const name = document.getElementById("name");
             const description = document.getElementById("description")
             const requirement = document.getElementById("requirement")
             const saveButton = document.getElementById("save")
@@ -33,7 +37,7 @@
                 saveButton.disabled = true
                 cancelButton.disabled = true
 
-                if (description.value === "{{ achievement.Description }}" && requirement.value === "{{ achievement.ProgressRequirement }}") {
+                if (name.value === "{{ Model.Achievement.Name }}" && description.value === "{{ Model.Achievement.Description }}" && requirement.value === "{{ Model.Achievement.ProgressRequirement }}") {
                     saveButton.disabled = false
                     cancelButton.disabled = false
                     return
@@ -45,6 +49,7 @@
                         "content-type": "application/json",
                     },
                     body: JSON.stringify({
+                        name: name.value,
                         description: description.value,
                         progressRequirement: parseInt(requirement.value),
                     }),
@@ -78,8 +83,9 @@
             }
 
             cancelButton.onclick = function() {
-                description.value = "{{ achievement.Description }}"
-                requirement.value = "{{ achievement.ProgressRequirement }}"
+                name.value = "{{ Model.Achievement.Name }}"
+                description.value = "{{ Model.Achievement.Description }}"
+                requirement.value = "{{ Model.Achievement.ProgressRequirement }}"
             }
         }
     </script>

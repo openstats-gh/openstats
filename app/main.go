@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -54,11 +55,7 @@ func main() {
 
 	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
 	// other admins
-	AddRootAdminUser()
-
-	if err := SetupAuth(); err != nil {
-		log.Fatal(err)
-	}
+	AddRootAdminUser(context.Background())
 
 	templateEngine := jet.New("./views", ".jet.html")
 

@@ -9,7 +9,7 @@
     </thead>
     {{ range Users }}
         <tr>
-            <td>{{ .Name }}</td>
+            <td>{{ .DisplayName.String }}</td>
             <td>
                 <a href="/admin/users/{{ .Slug }}">{{ .Slug }}</a>
             </td>
