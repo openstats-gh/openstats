@@ -2,13 +2,13 @@
     <h1>Game Not Found</h1>
     <h2>There is no game at the path '{{ Path }}'</h2>
 {{ else }}
-    <h1>Game: {{ Game.Slug }}</h1>
+    <h1>Game: {{ Model.Game.Slug }}</h1>
 
     <h2>Achievements</h2>
     <table>
-        {{ range Game.Achievements }}
+        {{ range Model.Achievements }}
             <tr>
-                <td><a href="/admin/developers/{{ Game.DeveloperSlug }}/games/{{ Game.Slug }}/achievements/{{ .Slug }}">{{ .Slug }}</a></td>
+                <td><a href="/admin/developers/{{ Model.DeveloperSlug }}/games/{{ Model.Game.Slug }}/achievements/{{ .Slug }}">{{ .Slug }}</a></td>
             </tr>
         {{ end }}
     </table>

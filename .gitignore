@@ -34,3 +34,7 @@ go.work.sum
 # ignore local Sqlite database files
 *.db
 *.sqlite3
+
+# ignore bobgen generated files
+*.bob.*
+*.bob_test.*

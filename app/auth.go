@@ -1,59 +1,47 @@
 package main
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"github.com/dresswithpockets/openstats/app/password"
+	"github.com/dresswithpockets/openstats/app/queries"
+	"github.com/dresswithpockets/openstats/app/query"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/session"
-	"github.com/gofiber/fiber/v2/utils"
-	sqliteStorage "github.com/gofiber/storage/sqlite3/v2"
-	"gorm.io/gorm"
 	"log"
 	"net/mail"
 	"slices"
-	"time"
 	"unicode"
 )
 
-var AuthHandler fiber.Handler
-var SessionStore *session.Store
-var authSetupComplete = false
+func AuthHandler(c *fiber.Ctx) error {
+	currentSession, err := SessionStore.Get(c)
+	if err != nil {
+		log.Println(err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
 
-func NewAuthHandler(db *gorm.DB, store *session.Store) fiber.Handler {
-	return func(c *fiber.Ctx) error {
-		currentSession, err := store.Get(c)
-		if err != nil {
-			log.Println(err)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-
-		sessionUserId := currentSession.Get("userId")
-		if sessionUserId == nil {
-			return c.Next()
-		}
-
-		var sessionUser User
-		result := db.First(&sessionUser, sessionUserId)
-		if result.Error == nil {
-			c.Locals("user", &sessionUser)
-		}
-
-		if result.Error != nil && !errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			log.Println(result.Error)
-			return c.SendStatus(fiber.StatusInternalServerError)
-		}
-
+	sessionUserId, ok := currentSession.GetUserID()
+	if !ok {
 		return c.Next()
 	}
+
+	sessionUser, findErr := Queries.FindUser(c.Context(), sessionUserId)
+	if errors.Is(findErr, sql.ErrNoRows) {
+		return c.Next()
+	}
+
+	if findErr != nil {
+		log.Println(findErr)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	Locals.User.Set(c, &sessionUser)
+	return c.Next()
 }
 
 func RequireAuthHandler(c *fiber.Ctx) error {
-	user := c.Locals("user")
-	if user == nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	if _, isUser := user.(*User); !isUser {
+	if !Locals.User.Exists(c) {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -61,34 +49,12 @@ func RequireAuthHandler(c *fiber.Ctx) error {
 }
 
 func RequireAdminAuthHandler(c *fiber.Ctx) error {
-	userLocal := c.Locals("user")
-	if userLocal == nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if user, isUser := userLocal.(*User); !isUser || !IsAdmin(user) {
-		return c.SendStatus(fiber.StatusNotFound)
+	user, ok := Locals.User.Get(c)
+	if !ok || !IsAdmin(user) {
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	return c.Next()
-}
-
-func SetupAuth() error {
-	if DB == nil {
-		return errors.New("DB not initialized")
-	}
-
-	SessionStore = session.New(session.Config{
-		Expiration:   7 * 24 * time.Hour,
-		Storage:      sqliteStorage.New(sqliteStorage.Config{}),
-		CookieSecure: true,
-		KeyGenerator: utils.UUIDv4,
-	})
-
-	AuthHandler = NewAuthHandler(DB, SessionStore)
-
-	authSetupComplete = true
-	return nil
 }
 
 func ValidDisplayName(displayName string) bool {
@@ -131,7 +97,7 @@ func ValidPassword(password string) bool {
 }
 
 func handleGetLoginView(c *fiber.Ctx) error {
-	if c.Locals("user") != nil {
+	if Locals.User.Exists(c) {
 		// we're already authorized so we can just go back home
 		return c.RedirectBack("/")
 	}
@@ -172,19 +138,21 @@ func handlePostLoginView(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	var matchedUser User
-	result := DB.Preload("Password").First(&matchedUser, "slug = ?", loginBody.Slug)
-	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+	result, findErr := Queries.FindUserBySlugWithPassword(c.Context(), loginBody.Slug)
+	if findErr != nil {
+	}
+
+	if errors.Is(findErr, sql.ErrNoRows) {
 		// TODO: redirect to `/login` with username not found or password doesnt match
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	if result.Error != nil {
-		log.Println(result.Error)
+	if findErr != nil {
+		log.Println(findErr)
 		return c.Status(fiber.StatusInternalServerError).Render("500", nil)
 	}
 
-	verifyErr := password.VerifyPassword(loginBody.Password, matchedUser.Password.EncodedHash)
+	verifyErr := password.VerifyPassword(loginBody.Password, result.EncodedHash)
 	if errors.Is(verifyErr, password.ErrHashMismatch) {
 		// TODO: redirect to `/login` with username not found or password doesnt match
 		return c.SendStatus(fiber.StatusNotFound)
@@ -195,7 +163,7 @@ func handlePostLoginView(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).Render("500", nil)
 	}
 
-	currentSession.Set("userId", matchedUser.ID)
+	currentSession.SetUserID(result.ID)
 	if saveErr := currentSession.Save(); saveErr != nil {
 		log.Println(saveErr)
 		return c.Status(fiber.StatusInternalServerError).Render("500", nil)
@@ -205,7 +173,7 @@ func handlePostLoginView(c *fiber.Ctx) error {
 }
 
 func handleGetRegisterView(c *fiber.Ctx) error {
-	if c.Locals("user") != nil {
+	if Locals.User.Exists(c) {
 		// we're already authorized so we can just go back home
 		return c.Redirect("/")
 	}
@@ -219,10 +187,9 @@ var (
 	ErrInvalidDisplayName  = errors.New("invalid display name")
 	ErrInvalidSlug         = errors.New("invalid slug")
 	ErrInvalidPassword     = errors.New("invalid password")
-	ErrSlugAlreadyInUse    = errors.New("slug already in use")
 )
 
-func AddNewUser(displayName, email string, slug, pass string) (newUser *User, err error) {
+func AddNewUser(ctx context.Context, displayName, email string, slug, pass string) (newUser *query.User, err error) {
 	if len(email) > 0 {
 		_, emailErr := mail.ParseAddress(email)
 		if emailErr != nil {
@@ -252,36 +219,11 @@ func AddNewUser(displayName, email string, slug, pass string) (newUser *User, er
 		return nil, passwordErr
 	}
 
-	newUser = &User{
-		Slug:        slug,
-		Password:    UserPassword{EncodedHash: encodedPassword},
-		SlugRecords: []UserSlugRecord{{Slug: slug}},
-	}
-
-	if len(email) > 0 {
-		newUser.Emails = []UserEmail{{Email: email}}
-	}
-
-	if len(displayName) > 0 {
-		newUser.DisplayNames = []UserDisplayName{{Name: displayName}}
-	}
-
-	result := DB.Create(newUser)
-	if errors.Is(result.Error, gorm.ErrDuplicatedKey) {
-		// TODO: redirect to `/register` with conflict info
-		return nil, ErrSlugAlreadyInUse
-	}
-
-	if result.Error != nil {
-		log.Println(result.Error)
-		return nil, result.Error
-	}
-
-	return newUser, nil
+	return Actions.CreateUser(ctx, slug, encodedPassword, email, displayName)
 }
 
 func handlePostRegisterView(c *fiber.Ctx) error {
-	if c.Locals("user") != nil {
+	if Locals.User.Exists(c) {
 		// we're already authorized so we can just go back home
 		return c.Redirect("/")
 	}
@@ -299,7 +241,13 @@ func handlePostRegisterView(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	newUser, newUserError := AddNewUser(registerBody.DisplayName, registerBody.Email, registerBody.Slug, registerBody.Password)
+	newUser, newUserError := AddNewUser(
+		c.Context(),
+		registerBody.DisplayName,
+		registerBody.Email,
+		registerBody.Slug,
+		registerBody.Password,
+	)
 	if newUserError != nil {
 		if errors.Is(newUserError, ErrInvalidEmailAddress) {
 			// TODO: return problem json indicating the error
@@ -325,7 +273,7 @@ func handlePostRegisterView(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
-		if errors.Is(newUserError, ErrSlugAlreadyInUse) {
+		if errors.Is(newUserError, queries.ErrSlugAlreadyInUse) {
 			return c.SendStatus(fiber.StatusConflict)
 		}
 
@@ -333,7 +281,7 @@ func handlePostRegisterView(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	currentSession.Set("userId", newUser.ID)
+	currentSession.SetUserID(newUser.ID)
 	if saveErr := currentSession.Save(); saveErr != nil {
 		log.Println(saveErr)
 		return c.SendStatus(fiber.StatusInternalServerError)
@@ -343,7 +291,7 @@ func handlePostRegisterView(c *fiber.Ctx) error {
 }
 
 func handleGetLogoutView(c *fiber.Ctx) error {
-	if c.Locals("user") == nil {
+	if !Locals.User.Exists(c) {
 		// we're already logged out, just go back home
 		return c.Redirect("/")
 	}
@@ -353,7 +301,7 @@ func handleGetLogoutView(c *fiber.Ctx) error {
 }
 
 func handlePostLogoutView(c *fiber.Ctx) error {
-	if c.Locals("user") == nil {
+	if !Locals.User.Exists(c) {
 		// we're already logged out, just go back home
 		return c.Redirect("/")
 	}
@@ -374,13 +322,11 @@ func handlePostLogoutView(c *fiber.Ctx) error {
 }
 
 func SetupAuthRoutes(router fiber.Router) error {
-	if !authSetupComplete {
-		return errors.New("call SetupAuth() before calling SetupAuthRoutes()")
-	}
-
 	rootRoute := router.Group("/")
+
 	rootRoute.Use(AuthHandler)
 	rootRoute.Use("/auth/logout", RequireAuthHandler)
+
 	rootRoute.Get("/login", handleGetLoginView)
 	rootRoute.Post("/login", handlePostLoginView)
 	rootRoute.Get("/register", handleGetRegisterView)
