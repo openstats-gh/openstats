@@ -57,6 +57,11 @@ func RequireAdminAuthHandler(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+func ValidEmailAddress(email string) bool {
+	_, emailErr := mail.ParseAddress(email)
+	return emailErr == nil
+}
+
 func ValidDisplayName(displayName string) bool {
 	return len(displayName) >= MinDisplayNameLength && len(displayName) <= MaxDisplayNameLength
 }
@@ -190,19 +195,12 @@ var (
 )
 
 func AddNewUser(ctx context.Context, displayName, email string, slug, pass string) (newUser *query.User, err error) {
-	if len(email) > 0 {
-		_, emailErr := mail.ParseAddress(email)
-		if emailErr != nil {
-			return nil, ErrInvalidEmailAddress
-		}
+	if len(email) > 0 && !ValidEmailAddress(email) {
+		return nil, ErrInvalidEmailAddress
 	}
 
-	if len(displayName) > 0 {
-		if !ValidDisplayName(displayName) {
-			// TODO: return problem json indicating the error
-			// TODO: redirect to `/register` with bad request info
-			return nil, ErrInvalidDisplayName
-		}
+	if len(displayName) > 0 && !ValidDisplayName(displayName) {
+		return nil, ErrInvalidDisplayName
 	}
 
 	if !ValidSlug(slug) {

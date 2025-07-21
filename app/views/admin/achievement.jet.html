@@ -26,7 +26,7 @@
     </div>
 
     <script type="text/javascript">
-        window.onload = function() {
+        window.addEventListener("load", function() {
             const name = document.getElementById("name");
             const description = document.getElementById("description")
             const requirement = document.getElementById("requirement")
@@ -87,6 +87,6 @@
                 description.value = "{{ Model.Achievement.Description }}"
                 requirement.value = "{{ Model.Achievement.ProgressRequirement }}"
             }
-        }
+        })
     </script>
 {{ end }}

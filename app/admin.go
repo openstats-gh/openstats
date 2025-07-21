@@ -142,6 +142,68 @@ func viewAdminUsersRead(ctx *fiber.Ctx) error {
 	}, "layouts/admin")
 }
 
+func viewAdminUsersCreate(c *fiber.Ctx) error {
+	slug := c.Params("slug")
+	if slug == "" || slug == "@" {
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	type CreateUserDt struct {
+		Email       string `json:"email" form:"email"`
+		DisplayName string `json:"displayName" form:"displayName"`
+		Password    string `json:"password" form:"password"`
+	}
+
+	var createUserBody CreateUserDt
+	if bodyErr := c.BodyParser(&createUserBody); bodyErr != nil {
+		// TODO: return problem json indicating the error
+		return c.SendStatus(fiber.StatusBadRequest)
+	}
+
+	_, newUserError := AddNewUser(
+		c.Context(),
+		createUserBody.DisplayName,
+		createUserBody.Email,
+		slug,
+		createUserBody.Password,
+	)
+	if newUserError != nil {
+		// TODO: return problem json indicating the error
+		if errors.Is(newUserError, ErrInvalidEmailAddress) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+
+		if errors.Is(newUserError, ErrInvalidDisplayName) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+
+		if errors.Is(newUserError, ErrInvalidSlug) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+
+		if errors.Is(newUserError, ErrInvalidPassword) {
+			// TODO: return problem json indicating the error
+			// TODO: redirect to `/register` with bad request info
+			return c.SendStatus(fiber.StatusBadRequest)
+		}
+
+		if errors.Is(newUserError, queries.ErrSlugAlreadyInUse) {
+			return c.SendStatus(fiber.StatusConflict)
+		}
+
+		log.Error(newUserError)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	return c.RedirectToRoute("readUser", fiber.Map{"slug": slug})
+}
+
 func viewAdminUsersCreateOrUpdate(ctx *fiber.Ctx) error {
 	return nil
 }
@@ -411,7 +473,8 @@ func SetupAdminViews(router fiber.Router) error {
 	adminGroup.Get("/", viewAdminHomeGet)
 
 	adminGroup.Get("/users", viewAdminUsersList)
-	adminGroup.Get("/users/:slug", viewAdminUsersRead)
+	adminGroup.Get("/users/:slug", viewAdminUsersRead).Name("readUser")
+	adminGroup.Post("/users/:slug", viewAdminUsersCreate)
 	adminGroup.Put("/users/:slug", viewAdminUsersCreateOrUpdate)
 	adminGroup.Delete("/users/:slug", viewAdminUsersDelete)
 
