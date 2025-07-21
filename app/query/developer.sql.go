@@ -7,6 +7,8 @@ package query
 
 import (
 	"context"
+	"database/sql"
+	"time"
 )
 
 const allDevelopers = `-- name: AllDevelopers :many
@@ -64,24 +66,30 @@ func (q *Queries) FindDeveloperBySlug(ctx context.Context, slug string) (Develop
 }
 
 const getDeveloperGames = `-- name: GetDeveloperGames :many
-select game.slug
+select game.slug, game.created_at, game.deleted_at
 from game
 where developer_id = ?
 `
 
-func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int64) ([]string, error) {
+type GetDeveloperGamesRow struct {
+	Slug      string
+	CreatedAt time.Time
+	DeletedAt sql.NullTime
+}
+
+func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int64) ([]GetDeveloperGamesRow, error) {
 	rows, err := q.db.QueryContext(ctx, getDeveloperGames, developerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []GetDeveloperGamesRow
 	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
+		var i GetDeveloperGamesRow
+		if err := rows.Scan(&i.Slug, &i.CreatedAt, &i.DeletedAt); err != nil {
 			return nil, err
 		}
-		items = append(items, slug)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -93,25 +101,41 @@ func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int64) ([]s
 }
 
 const getDeveloperMembers = `-- name: GetDeveloperMembers :many
-select user.slug
-from user
-     join developer_member on user.id = developer_member.user_id
-where developer_member.developer_id = ?
+select u.slug, udn1.display_name, dm.created_at as joined_at, dm.deleted_at as left_at
+from user u
+join developer_member dm on u.id = dm.user_id
+left outer join user_display_name udn1 on u.id = udn1.user_id and udn1.deleted_at is null
+left outer join user_display_name udn2 on u.id = udn2.user_id and udn2.deleted_at is null and
+                                          (udn1.created_at < udn2.created_at or
+                                           (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
+where dm.developer_id = ?
 `
 
-func (q *Queries) GetDeveloperMembers(ctx context.Context, developerID int64) ([]string, error) {
+type GetDeveloperMembersRow struct {
+	Slug        string
+	DisplayName sql.NullString
+	JoinedAt    time.Time
+	LeftAt      sql.NullTime
+}
+
+func (q *Queries) GetDeveloperMembers(ctx context.Context, developerID int64) ([]GetDeveloperMembersRow, error) {
 	rows, err := q.db.QueryContext(ctx, getDeveloperMembers, developerID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []GetDeveloperMembersRow
 	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
+		var i GetDeveloperMembersRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.DisplayName,
+			&i.JoinedAt,
+			&i.LeftAt,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, slug)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

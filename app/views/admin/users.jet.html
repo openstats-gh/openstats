@@ -1,13 +1,12 @@
 <h2>Users</h2>
 <hr>
 <div class="mb-3">
-    <button type="button" class="btn btn-secondary m-1">New User</button>
-    <button type="button" class="btn btn-secondary m-1">Delete User</button>
+    <button type="button" class="btn btn-secondary m-1"><i class="bi bi-plus-circle"></i> Create User</button>
 </div>
 <table class="table table-striped table-hover table-responsive">
     <thead>
         <tr>
-            <th scope="col">Select</th>
+            <th scope="col"></th>
             <th scope="col">Slug</th>
             <th scope="col">Display Name</th>
             <th scope="col">Created At</th>
@@ -19,11 +18,11 @@
         {{ range Users }}
         <tr>
             <td class="text-center">
-                <input type="checkbox" class="form-check-input form-control d-inline-block" value="" id="checkUser">
+                <a type="button" class="btn btn-secondary m-1" href="/admin/users/{{ .Slug }}">
+                    <i class="bi bi-person"></i>
+                </a>
             </td>
-            <th scope="row">
-                <a href="/admin/users/{{ .Slug }}">{{ .Slug }}</a>
-            </th>
+            <th scope="row">{{ .Slug }}</th>
             <td>{{ .DisplayName.String }}</td>
             <td>{{ .CreatedAt }}</td>
             <td>{{ .UpdatedAt }}</td>

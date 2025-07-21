@@ -191,8 +191,8 @@ func viewAdminDevelopersRead(ctx *fiber.Ctx) error {
 
 	type Model struct {
 		Developer query.Developer
-		Members   []string
-		Games     []string
+		Members   []query.GetDeveloperMembersRow
+		Games     []query.GetDeveloperGamesRow
 	}
 
 	return ctx.Render("admin/developer", fiber.Map{
