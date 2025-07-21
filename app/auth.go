@@ -9,9 +9,6 @@ import (
 	"github.com/dresswithpockets/openstats/app/query"
 	"github.com/gofiber/fiber/v2"
 	"log"
-	"net/mail"
-	"slices"
-	"unicode"
 )
 
 func AuthHandler(c *fiber.Ctx) error {
@@ -57,50 +54,6 @@ func RequireAdminAuthHandler(c *fiber.Ctx) error {
 	return c.Next()
 }
 
-func ValidEmailAddress(email string) bool {
-	_, emailErr := mail.ParseAddress(email)
-	return emailErr == nil
-}
-
-func ValidDisplayName(displayName string) bool {
-	return len(displayName) >= MinDisplayNameLength && len(displayName) <= MaxDisplayNameLength
-}
-
-// ValidSlug returns true if all of these rules are followed:
-//   - slug is at least MinSlugNameLength and no more than MaxSlugNameLength in length
-//   - slug is all lowercase
-//   - slug contains only latin characters, numbers, or a dash
-func ValidSlug(slug string) bool {
-	if len(slug) < MinSlugNameLength || len(slug) > MaxSlugNameLength {
-		return false
-	}
-
-	for _, r := range []rune(slug) {
-		if !unicode.IsLower(r) && !unicode.IsNumber(r) && !unicode.IsLetter(r) && r != '-' {
-			return false
-		}
-	}
-
-	return true
-}
-
-// ValidPassword returns true if all of these rules are followed:
-//   - password is at least MinPasswordLength and no more than MaxPasswordLength in length
-//   - password contains only latin characters, numbers, or some special characters: !@#$%^&*
-func ValidPassword(password string) bool {
-	if len(password) < MinPasswordLength || len(password) > MaxPasswordLength {
-		return false
-	}
-
-	for _, r := range []rune(password) {
-		if !unicode.IsNumber(r) && !unicode.IsLetter(r) && !slices.Contains(ValidSlugSpecialCharacters, r) {
-			return false
-		}
-	}
-
-	return true
-}
-
 func handleGetLoginView(c *fiber.Ctx) error {
 	if Locals.User.Exists(c) {
 		// we're already authorized so we can just go back home
@@ -120,8 +73,8 @@ func handlePostLoginView(c *fiber.Ctx) error {
 
 	type LoginDto struct {
 		// Slug is the user's unique username
-		Slug     string `json:"slug" form:"slug"`
-		Password string `json:"password" form:"password"`
+		Slug     string `json:"slug" form:"slug" validator:"required,slug"`
+		Password string `json:"password" form:"password" validator:"required,password"`
 	}
 
 	var loginBody LoginDto
@@ -131,20 +84,14 @@ func handlePostLoginView(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	if !ValidSlug(loginBody.Slug) {
-		// TODO: return problem json indicating the error
-		// TODO: redirect to `/login` with bad request info
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	if !ValidPassword(loginBody.Password) {
-		// TODO: return problem json indicating the error
-		// TODO: redirect to `/login` with bad request info
-		return c.SendStatus(fiber.StatusBadRequest)
+	if validateErr := Validate(loginBody); validateErr != nil {
+		return validateErr
 	}
 
 	result, findErr := Queries.FindUserBySlugWithPassword(c.Context(), loginBody.Slug)
 	if findErr != nil {
+		log.Println(findErr)
+		return c.Status(fiber.StatusInternalServerError).Render("500", nil)
 	}
 
 	if errors.Is(findErr, sql.ErrNoRows) {

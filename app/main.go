@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/dresswithpockets/openstats/app/password"
+	"github.com/dresswithpockets/openstats/app/problems"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/favicon"
@@ -53,6 +55,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err := SetupValidations(); err != nil {
+		log.Fatal(err)
+	}
+
 	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
 	// other admins
 	AddRootAdminUser(context.Background())
@@ -63,6 +69,27 @@ func main() {
 
 	app := fiber.New(fiber.Config{
 		Views: templateEngine,
+		ErrorHandler: func(c *fiber.Ctx, err error) error {
+			var validationErr *ValidationError
+			if errors.As(err, &validationErr) {
+				var fieldErrors map[string][]string
+				for _, fieldError := range validationErr.Errors {
+					detail := GetValidationDetail(fieldError.Field)
+					fieldErrors[fieldError.Field] = append(fieldErrors[fieldError.Field], detail)
+				}
+
+				c.Status(400)
+				return c.JSON(problems.Validation("", fieldErrors))
+			}
+
+			var conflictErr *ConflictError
+			if errors.As(err, &conflictErr) {
+				c.Status(fiber.StatusConflict)
+				return c.JSON(problems.Conflict(conflictErr.Field, conflictErr.Value, ""))
+			}
+
+			return fiber.DefaultErrorHandler(c, err)
+		},
 	})
 
 	app.Use(cors.New())
