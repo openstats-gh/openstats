@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+
 	"github.com/dresswithpockets/openstats/app/queries"
 	"github.com/dresswithpockets/openstats/app/query"
 )

@@ -15,8 +15,8 @@ func viewHomeGet(c *fiber.Ctx) error {
 
 		var err error
 		recentUserAchievements, err = Queries.GetUserRecentAchievements(c.Context(), query.GetUserRecentAchievementsParams{
-			UserID: user.ID,
-			Limit:  20,
+			UserSlug: userSlug,
+			Limit:    20,
 		})
 
 		if err != nil {
@@ -24,8 +24,8 @@ func viewHomeGet(c *fiber.Ctx) error {
 		}
 
 		recentOtherUserAchievements, err = Queries.GetOtherUserRecentAchievements(c.Context(), query.GetOtherUserRecentAchievementsParams{
-			UserID: user.ID,
-			Limit:  20,
+			ExcludedUserSlug: userSlug,
+			Limit:            20,
 		})
 
 		if err != nil {

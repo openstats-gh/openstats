@@ -212,12 +212,17 @@ func (q *Queries) FindUserBySlugWithPassword(ctx context.Context, slug string) (
 }
 
 const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements :many
-select a.name, g.slug as game_name
+select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.slug as user_slug, udn1.display_name as user_display_name
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
      join user u on ap.user_id = u.id
      join game g on a.game_id = g.id
-where u.id != ?2
+     join developer d on g.developer_id = d.id
+     left outer join user_display_name udn1 on u.id = udn1.user_id and udn1.deleted_at is null
+     left outer join user_display_name udn2 on u.id = udn2.user_id and udn2.deleted_at is null and
+                                               (udn1.created_at < udn2.created_at or
+                                                (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
+where u.slug != ?2
   and ap.progress >= a.progress_requirement
   and u.deleted_at is null
   and g.deleted_at is null
@@ -228,17 +233,23 @@ limit ?
 `
 
 type GetOtherUserRecentAchievementsParams struct {
-	UserID int64
-	Limit  int64
+	ExcludedUserSlug string
+	Limit            int64
 }
 
 type GetOtherUserRecentAchievementsRow struct {
-	Name     string
-	GameName string
+	DeveloperSlug   string
+	GameSlug        string
+	GameName        string
+	Slug            string
+	Name            string
+	Description     string
+	UserSlug        string
+	UserDisplayName sql.NullString
 }
 
 func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOtherUserRecentAchievementsParams) ([]GetOtherUserRecentAchievementsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getOtherUserRecentAchievements, arg.UserID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, getOtherUserRecentAchievements, arg.ExcludedUserSlug, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +257,16 @@ func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOth
 	var items []GetOtherUserRecentAchievementsRow
 	for rows.Next() {
 		var i GetOtherUserRecentAchievementsRow
-		if err := rows.Scan(&i.Name, &i.GameName); err != nil {
+		if err := rows.Scan(
+			&i.DeveloperSlug,
+			&i.GameSlug,
+			&i.GameName,
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+			&i.UserSlug,
+			&i.UserDisplayName,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -376,13 +396,35 @@ func (q *Queries) GetUserEmails(ctx context.Context, userID int64) ([]UserEmail,
 	return items, nil
 }
 
+const getUserLatestDisplayName = `-- name: GetUserLatestDisplayName :one
+select id, created_at, deleted_at, user_id, display_name
+from user_display_name udn
+where udn.user_id = ? and udn.deleted_at is null
+order by udn.created_at desc
+limit 1
+`
+
+func (q *Queries) GetUserLatestDisplayName(ctx context.Context, userID int64) (UserDisplayName, error) {
+	row := q.db.QueryRowContext(ctx, getUserLatestDisplayName, userID)
+	var i UserDisplayName
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.DeletedAt,
+		&i.UserID,
+		&i.DisplayName,
+	)
+	return i, err
+}
+
 const getUserRecentAchievements = `-- name: GetUserRecentAchievements :many
-select a.name, g.slug as game_name
+select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
      join user u on ap.user_id = u.id
      join game g on a.game_id = g.id
-where u.id = ?2
+     join developer d on g.developer_id = d.id
+where u.slug = ?2
   and ap.progress >= a.progress_requirement
   and u.deleted_at is null
   and g.deleted_at is null
@@ -393,17 +435,21 @@ limit ?
 `
 
 type GetUserRecentAchievementsParams struct {
-	UserID int64
-	Limit  int64
+	UserSlug string
+	Limit    int64
 }
 
 type GetUserRecentAchievementsRow struct {
-	Name     string
-	GameName string
+	DeveloperSlug string
+	GameSlug      string
+	GameName      string
+	Slug          string
+	Name          string
+	Description   string
 }
 
 func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRecentAchievementsParams) ([]GetUserRecentAchievementsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserRecentAchievements, arg.UserID, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, getUserRecentAchievements, arg.UserSlug, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -411,7 +457,14 @@ func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRece
 	var items []GetUserRecentAchievementsRow
 	for rows.Next() {
 		var i GetUserRecentAchievementsRow
-		if err := rows.Scan(&i.Name, &i.GameName); err != nil {
+		if err := rows.Scan(
+			&i.DeveloperSlug,
+			&i.GameSlug,
+			&i.GameName,
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap');
+
+@import "tailwindcss";
+@plugin "@tailwindcss/forms";
+
+@theme {
+    --font-sans: "Comic Sans MS", "Comic Neue", "sans-sarif";
+}
+
+:root {
+    --color: whitesmoke;
+    --body-background: #111;
+    --content-background: #111;
+    --link-color: #13b8eb;
+    --row-modifier: white;
+    --branding-background: #b0b;
+    --branding-color: #fff;
+}
+
+@layer base {
+    h1 {
+        @apply text-6xl p-6;
+    }
+
+    h2 {
+        @apply text-4xl p-4;
+    }
+
+    h3 {
+        @apply text-2xl p-3;
+    }
+
+    h4 {
+        @apply text-xl p-2;
+    }
+
+    main {
+        @apply flex items-center flex-col;
+        @apply bg-[url(background.png)] bg-repeat absolute w-screen h-screen text-center;
+        @apply text-rose-200;
+    }
+
+    a {
+        @apply text-purple-400;
+    }
+
+    a:hover {
+        @apply text-purple-300;
+    }
+
+    a:active {
+        @apply text-purple-500;
+    }
+}

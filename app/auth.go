@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
+
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/queries"
 	"github.com/dresswithpockets/openstats/app/query"
 	"github.com/gofiber/fiber/v2"
-	"log"
 )
 
 func AuthHandler(c *fiber.Ctx) error {
@@ -89,11 +90,6 @@ func handlePostLoginView(c *fiber.Ctx) error {
 	}
 
 	result, findErr := Queries.FindUserBySlugWithPassword(c.Context(), loginBody.Slug)
-	if findErr != nil {
-		log.Println(findErr)
-		return c.Status(fiber.StatusInternalServerError).Render("500", nil)
-	}
-
 	if errors.Is(findErr, sql.ErrNoRows) {
 		// TODO: redirect to `/login` with username not found or password doesnt match
 		return c.SendStatus(fiber.StatusNotFound)
@@ -266,19 +262,45 @@ func handlePostLogoutView(c *fiber.Ctx) error {
 	return c.Redirect("/")
 }
 
+func handleGetSession(c *fiber.Ctx) error {
+	localUser, userExists := Locals.User.Get(c)
+	if !userExists {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	userDisplayName, err := Queries.GetUserLatestDisplayName(c.Context(), localUser.ID)
+	if errors.Is(err, sql.ErrNoRows) {
+		userDisplayName = query.UserDisplayName{DisplayName: ""}
+	} else if err != nil {
+		log.Println(err)
+		return c.SendStatus(fiber.StatusInternalServerError)
+	}
+
+	// otherwise, we can just render the login form
+	return c.JSON(fiber.Map{
+		"slug":        localUser.Slug,
+		"displayName": userDisplayName.DisplayName,
+	})
+}
+
 func SetupAuthRoutes(router fiber.Router) error {
-	rootRoute := router.Group("/")
+	rootRoute := router.Group("/auth")
 
 	rootRoute.Use(AuthHandler)
-	rootRoute.Use("/auth/logout", RequireAuthHandler)
+	rootRoute.Use("/sign-out", RequireAuthHandler)
+	rootRoute.Get("/session", handleGetSession)
+	rootRoute.Post("/sign-in", handlePostLoginView)
+	rootRoute.Post("/sign-up", handlePostRegisterView)
+	rootRoute.Post("/sign-out", handlePostLogoutView)
 
-	rootRoute.Get("/login", handleGetLoginView)
-	rootRoute.Post("/login", handlePostLoginView)
-	rootRoute.Get("/register", handleGetRegisterView)
-	rootRoute.Post("/register", handlePostRegisterView)
+	// rootRoute.Use("/auth/logout", RequireAuthHandler)
+	// rootRoute.Get("/login", handleGetLoginView)
+	// rootRoute.Post("/login", handlePostLoginView)
+	// rootRoute.Get("/register", handleGetRegisterView)
+	// rootRoute.Post("/register", handlePostRegisterView)
 	// since GET requests MUST be idempotent on fly.io, the logout request must be AJAX
-	rootRoute.Get("/logout", handleGetLogoutView)
-	rootRoute.Post("/logout", handlePostLogoutView)
+	// rootRoute.Get("/logout", handleGetLogoutView)
+	// rootRoute.Post("/logout", handlePostLogoutView)
 
 	return nil
 }

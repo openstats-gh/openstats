@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/problems"
 	"github.com/gofiber/fiber/v2"
@@ -12,9 +16,6 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/healthcheck"
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/template/jet/v2"
-	"log"
-	"net/http"
-	"time"
 )
 
 const (
@@ -124,13 +125,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	//if err := SetupAuthApi(app); err != nil {
-	//	log.Fatal(err)
-	//}
-	//
-	//if err := SetupUserApi(app); err != nil {
-	//	log.Fatal(err)
-	//}
+	if err := SetupUsersRoutes(app); err != nil {
+		log.Fatal(err)
+	}
 
 	// TODO: user or profile apis
 	// TODO: developer apis
