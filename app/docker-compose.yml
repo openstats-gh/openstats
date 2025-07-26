@@ -1,0 +1,29 @@
+services:
+  database:
+    image: postgres:17
+    container_name: postgres_local
+    ports:
+      - "15432:5432"
+    env_file:
+      - .env.local
+    networks:
+      - postgres-network
+    volumes:
+      - ${PWD}/.data-db/:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    ports:
+      - "15433:80"
+    env_file:
+      - .env.local
+    depends_on:
+      - database
+    networks:
+      - postgres-network
+    volumes:
+      - ${PWD}/.data-pgadmin/:/var/lib/pgadmin/
+
+networks:
+  postgres-network:
+    driver: bridge
