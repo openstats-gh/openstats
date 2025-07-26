@@ -1,7 +1,7 @@
 # openstats
 
-Stats & achievement tracking website for games. Showcase your achievement progress, games you've 100%'d, your rarest
-achievements, and more! Follow other players & compare your stats.
+Stats & achievement tracking website for games. Follow other players & compare your stats. Showcase your achievement 
+progress, games you've 100%'d, your rarest achievements, and more!
 
 ## Who is this for?
 
@@ -11,7 +11,8 @@ Player profiles, achievement showcases, and more.
 
 ### For game developers
 
-openstats has a simple webapi for developer, granting achievement & stats tracking.
+openstats has a simple webapi for developers. Developers can track & update achievement progress, and log statistics 
+such as playtime.
 
 ### For me
 
@@ -24,6 +25,10 @@ showcases.
 
 WIP! Come back some time later™ and I'll have hopefully updated this to include more concrete self-hosting 
 instructions.
+
+## In the wild
+
+Soon...
 
 ## Development
 
