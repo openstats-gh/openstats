@@ -118,8 +118,3 @@ migrate create -ext sql -dir migrations a-summary-of-your-changes
 ```shell
 migrate -source file://migrations -database postgres://openstats:openstats@localhost:15432/openstats?sslmode=disable u
 ```
-
-### pgadmin
-
-`docker-compose.yml` is configured to run a pgadmin web server next to the postgres server. It can be accessed at 
-http://localhost:15433.
