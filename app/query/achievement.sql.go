@@ -10,30 +10,29 @@ import (
 )
 
 const findAchievementBySlug = `-- name: FindAchievementBySlug :one
-select a.id, a.created_at, a.updated_at, a.deleted_at, a.game_id, a.slug, a.name, a.description, a.progress_requirement
+select a.id, a.created_at, a.updated_at, a.game_id, a.slug, a.name, a.description, a.progress_requirement
 from achievement a
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
-where a.slug = ?
-  and d.slug = ?2
-  and g.slug = ?3
+where a.slug = $1
+  and d.slug = $2
+  and g.slug = $3
 limit 1
 `
 
 type FindAchievementBySlugParams struct {
-	Slug     string
+	AchSlug  string
 	DevSlug  string
 	GameSlug string
 }
 
 func (q *Queries) FindAchievementBySlug(ctx context.Context, arg FindAchievementBySlugParams) (Achievement, error) {
-	row := q.db.QueryRowContext(ctx, findAchievementBySlug, arg.Slug, arg.DevSlug, arg.GameSlug)
+	row := q.db.QueryRow(ctx, findAchievementBySlug, arg.AchSlug, arg.DevSlug, arg.GameSlug)
 	var i Achievement
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.GameID,
 		&i.Slug,
 		&i.Name,
@@ -44,8 +43,8 @@ func (q *Queries) FindAchievementBySlug(ctx context.Context, arg FindAchievement
 }
 
 const upsertAchievement = `-- name: UpsertAchievement :one
-insert into achievement (updated_at, game_id, slug, name, description, progress_requirement)
-values (datetime('now'), ?, ?, ?, ?, ?)
+insert into achievement (game_id, slug, name, description, progress_requirement)
+values ($1, $2, $3, $4, $5)
 on conflict(game_id, slug)
     do update set name=excluded.name,
                   description=excluded.description,
@@ -54,22 +53,22 @@ returning case when achievement.created_at == achievement.updated_at then true e
 `
 
 type UpsertAchievementParams struct {
-	GameID              int64
+	GameID              int32
 	Slug                string
 	Name                string
 	Description         string
-	ProgressRequirement int64
+	ProgressRequirement int32
 }
 
-func (q *Queries) UpsertAchievement(ctx context.Context, arg UpsertAchievementParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, upsertAchievement,
+func (q *Queries) UpsertAchievement(ctx context.Context, arg UpsertAchievementParams) (bool, error) {
+	row := q.db.QueryRow(ctx, upsertAchievement,
 		arg.GameID,
 		arg.Slug,
 		arg.Name,
 		arg.Description,
 		arg.ProgressRequirement,
 	)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
+	var upsert_was_insert bool
+	err := row.Scan(&upsert_was_insert)
+	return upsert_was_insert, err
 }

@@ -7,76 +7,102 @@ package query
 
 import (
 	"context"
-	"database/sql"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const addUser = `-- name: AddUser :one
+insert into users (slug) values ($1) returning id, created_at, updated_at, slug
+`
+
+func (q *Queries) AddUser(ctx context.Context, slug string) (User, error) {
+	row := q.db.QueryRow(ctx, addUser, slug)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Slug,
+	)
+	return i, err
+}
+
 const addUserDisplayName = `-- name: AddUserDisplayName :exec
-insert into user_display_name (user_id, display_name)
-values (?, ?)
+insert into user_display_name(user_id, display_name) values ($1, $2)
 `
 
 type AddUserDisplayNameParams struct {
-	UserID      int64
+	UserID      int32
 	DisplayName string
 }
 
 func (q *Queries) AddUserDisplayName(ctx context.Context, arg AddUserDisplayNameParams) error {
-	_, err := q.db.ExecContext(ctx, addUserDisplayName, arg.UserID, arg.DisplayName)
+	_, err := q.db.Exec(ctx, addUserDisplayName, arg.UserID, arg.DisplayName)
 	return err
 }
 
 const addUserEmail = `-- name: AddUserEmail :exec
-insert into user_email (updated_at, user_id, email)
-values (datetime('now'), ?, ?)
+insert into user_email(user_id, email) values ($1, $2)
 `
 
 type AddUserEmailParams struct {
-	UserID int64
+	UserID int32
 	Email  string
 }
 
 func (q *Queries) AddUserEmail(ctx context.Context, arg AddUserEmailParams) error {
-	_, err := q.db.ExecContext(ctx, addUserEmail, arg.UserID, arg.Email)
+	_, err := q.db.Exec(ctx, addUserEmail, arg.UserID, arg.Email)
 	return err
 }
 
-const addUserSlugRecord = `-- name: AddUserSlugRecord :exec
-insert into user_slug (user_id, slug)
-values (?, ?)
+const addUserPassword = `-- name: AddUserPassword :exec
+insert into user_password(user_id, encoded_hash) values ($1, $2)
 `
 
-type AddUserSlugRecordParams struct {
-	UserID int64
+type AddUserPasswordParams struct {
+	UserID      int32
+	EncodedHash string
+}
+
+func (q *Queries) AddUserPassword(ctx context.Context, arg AddUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, addUserPassword, arg.UserID, arg.EncodedHash)
+	return err
+}
+
+const addUserSlugHistory = `-- name: AddUserSlugHistory :exec
+insert into user_slug_history(user_id, slug) values ($1, $2)
+`
+
+type AddUserSlugHistoryParams struct {
+	UserID int32
 	Slug   string
 }
 
-func (q *Queries) AddUserSlugRecord(ctx context.Context, arg AddUserSlugRecordParams) error {
-	_, err := q.db.ExecContext(ctx, addUserSlugRecord, arg.UserID, arg.Slug)
+func (q *Queries) AddUserSlugHistory(ctx context.Context, arg AddUserSlugHistoryParams) error {
+	_, err := q.db.Exec(ctx, addUserSlugHistory, arg.UserID, arg.Slug)
 	return err
 }
 
 const allUsersWithDisplayNames = `-- name: AllUsersWithDisplayNames :many
-select u.id, u.created_at, u.updated_at, u.deleted_at, u.slug, udn1.display_name
-from user u
-     left outer join user_display_name udn1 on u.id = udn1.user_id and udn1.deleted_at is null
-     left outer join user_display_name udn2 on u.id = udn2.user_id and udn2.deleted_at is null and
+select u.id, u.created_at, u.updated_at, u.slug, udn1.display_name
+from users u
+     left outer join user_display_name udn1 on u.id = udn1.user_id
+     left outer join user_display_name udn2 on u.id = udn2.user_id and
                                                (udn1.created_at < udn2.created_at or
                                                 (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
 where udn2.id is null
 `
 
 type AllUsersWithDisplayNamesRow struct {
-	ID          int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   sql.NullTime
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 	Slug        string
-	DisplayName sql.NullString
+	DisplayName pgtype.Text
 }
 
 func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithDisplayNamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, allUsersWithDisplayNames)
+	rows, err := q.db.Query(ctx, allUsersWithDisplayNames)
 	if err != nil {
 		return nil, err
 	}
@@ -88,7 +114,6 @@ func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithD
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
 			&i.Slug,
 			&i.DisplayName,
 		); err != nil {
@@ -96,115 +121,70 @@ func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithD
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	return items, nil
 }
 
-const createUser = `-- name: CreateUser :one
-insert into user (updated_at, slug)
-values (datetime('now'), ?)
-returning id, created_at, updated_at, deleted_at, slug
-`
-
-func (q *Queries) CreateUser(ctx context.Context, slug string) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, slug)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.DeletedAt,
-		&i.Slug,
-	)
-	return i, err
-}
-
-const createUserPassword = `-- name: CreateUserPassword :exec
-insert into user_password (updated_at, user_id, encoded_hash)
-values (datetime('now'), ?, ?)
-`
-
-type CreateUserPasswordParams struct {
-	UserID      int64
-	EncodedHash string
-}
-
-func (q *Queries) CreateUserPassword(ctx context.Context, arg CreateUserPasswordParams) error {
-	_, err := q.db.ExecContext(ctx, createUserPassword, arg.UserID, arg.EncodedHash)
-	return err
-}
-
 const findUser = `-- name: FindUser :one
-select id, created_at, updated_at, deleted_at, slug
-from user
-where id = ?
-limit 1
+select id, created_at, updated_at, slug from users where id = $1 limit 1
 `
 
-func (q *Queries) FindUser(ctx context.Context, id int64) (User, error) {
-	row := q.db.QueryRowContext(ctx, findUser, id)
+func (q *Queries) FindUser(ctx context.Context, id int32) (User, error) {
+	row := q.db.QueryRow(ctx, findUser, id)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const findUserBySlug = `-- name: FindUserBySlug :one
-select id, created_at, updated_at, deleted_at, slug
-from user
-where slug = ?
+select id, created_at, updated_at, slug
+from users
+where slug = $1
 limit 1
 `
 
 func (q *Queries) FindUserBySlug(ctx context.Context, slug string) (User, error) {
-	row := q.db.QueryRowContext(ctx, findUserBySlug, slug)
+	row := q.db.QueryRow(ctx, findUserBySlug, slug)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const findUserBySlugWithPassword = `-- name: FindUserBySlugWithPassword :one
-select user.id, user.created_at, user.updated_at, user.deleted_at, user.slug, user_password.encoded_hash
-from user
-     join user_password on user.id = user_password.user_id
-where user.slug = ?
-  and user.deleted_at is null
+select u.id, u.created_at, u.updated_at, u.slug, up.encoded_hash
+from users u
+     join user_password up on u.id = up.user_id
+where u.slug = $1
 limit 1
 `
 
 type FindUserBySlugWithPasswordRow struct {
-	ID          int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   sql.NullTime
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 	Slug        string
 	EncodedHash string
 }
 
 func (q *Queries) FindUserBySlugWithPassword(ctx context.Context, slug string) (FindUserBySlugWithPasswordRow, error) {
-	row := q.db.QueryRowContext(ctx, findUserBySlugWithPassword, slug)
+	row := q.db.QueryRow(ctx, findUserBySlugWithPassword, slug)
 	var i FindUserBySlugWithPasswordRow
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Slug,
 		&i.EncodedHash,
 	)
@@ -215,26 +195,22 @@ const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements 
 select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.slug as user_slug, udn1.display_name as user_display_name
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
-     join user u on ap.user_id = u.id
+     join users u on ap.user_id = u.id
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
-     left outer join user_display_name udn1 on u.id = udn1.user_id and udn1.deleted_at is null
-     left outer join user_display_name udn2 on u.id = udn2.user_id and udn2.deleted_at is null and
+     left outer join user_display_name udn1 on u.id = udn1.user_id
+     left outer join user_display_name udn2 on u.id = udn2.user_id and
                                                (udn1.created_at < udn2.created_at or
                                                 (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
-where u.slug != ?2
+where u.slug != $2
   and ap.progress >= a.progress_requirement
-  and u.deleted_at is null
-  and g.deleted_at is null
-  and a.deleted_at is null
-  and ap.deleted_at is null
 order by ap.created_at desc
-limit ?
+limit $1
 `
 
 type GetOtherUserRecentAchievementsParams struct {
+	Limit            int32
 	ExcludedUserSlug string
-	Limit            int64
 }
 
 type GetOtherUserRecentAchievementsRow struct {
@@ -245,11 +221,11 @@ type GetOtherUserRecentAchievementsRow struct {
 	Name            string
 	Description     string
 	UserSlug        string
-	UserDisplayName sql.NullString
+	UserDisplayName pgtype.Text
 }
 
 func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOtherUserRecentAchievementsParams) ([]GetOtherUserRecentAchievementsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getOtherUserRecentAchievements, arg.ExcludedUserSlug, arg.Limit)
+	rows, err := q.db.Query(ctx, getOtherUserRecentAchievements, arg.Limit, arg.ExcludedUserSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -271,9 +247,6 @@ func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOth
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -281,22 +254,20 @@ func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOth
 }
 
 const getUserDevelopers = `-- name: GetUserDevelopers :many
-select d.slug, d.created_at, d.deleted_at, dm.created_at as joined_at, dm.deleted_at as left_at
+select d.slug, d.created_at, dm.created_at as joined_at
 from developer_member dm
      join developer d on dm.developer_id = d.id
-where dm.user_id = ?
+where dm.user_id = $1
 `
 
 type GetUserDevelopersRow struct {
 	Slug      string
-	CreatedAt time.Time
-	DeletedAt sql.NullTime
-	JoinedAt  time.Time
-	LeftAt    sql.NullTime
+	CreatedAt pgtype.Timestamptz
+	JoinedAt  pgtype.Timestamptz
 }
 
-func (q *Queries) GetUserDevelopers(ctx context.Context, userID int64) ([]GetUserDevelopersRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserDevelopers, userID)
+func (q *Queries) GetUserDevelopers(ctx context.Context, userID int32) ([]GetUserDevelopersRow, error) {
+	rows, err := q.db.Query(ctx, getUserDevelopers, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -304,19 +275,10 @@ func (q *Queries) GetUserDevelopers(ctx context.Context, userID int64) ([]GetUse
 	var items []GetUserDevelopersRow
 	for rows.Next() {
 		var i GetUserDevelopersRow
-		if err := rows.Scan(
-			&i.Slug,
-			&i.CreatedAt,
-			&i.DeletedAt,
-			&i.JoinedAt,
-			&i.LeftAt,
-		); err != nil {
+		if err := rows.Scan(&i.Slug, &i.CreatedAt, &i.JoinedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -325,13 +287,13 @@ func (q *Queries) GetUserDevelopers(ctx context.Context, userID int64) ([]GetUse
 }
 
 const getUserDisplayNames = `-- name: GetUserDisplayNames :many
-select id, created_at, deleted_at, user_id, display_name
+select id, created_at, user_id, display_name
 from user_display_name
-where user_id = ?
+where user_id = $1
 `
 
-func (q *Queries) GetUserDisplayNames(ctx context.Context, userID int64) ([]UserDisplayName, error) {
-	rows, err := q.db.QueryContext(ctx, getUserDisplayNames, userID)
+func (q *Queries) GetUserDisplayNames(ctx context.Context, userID int32) ([]UserDisplayName, error) {
+	rows, err := q.db.Query(ctx, getUserDisplayNames, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -342,16 +304,12 @@ func (q *Queries) GetUserDisplayNames(ctx context.Context, userID int64) ([]User
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,
-			&i.DeletedAt,
 			&i.UserID,
 			&i.DisplayName,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -360,13 +318,13 @@ func (q *Queries) GetUserDisplayNames(ctx context.Context, userID int64) ([]User
 }
 
 const getUserEmails = `-- name: GetUserEmails :many
-select id, created_at, updated_at, deleted_at, user_id, email, confirmed_at
+select id, created_at, updated_at, user_id, email, confirmed_at
 from user_email
-where user_id = ?
+where user_id = $1
 `
 
-func (q *Queries) GetUserEmails(ctx context.Context, userID int64) ([]UserEmail, error) {
-	rows, err := q.db.QueryContext(ctx, getUserEmails, userID)
+func (q *Queries) GetUserEmails(ctx context.Context, userID int32) ([]UserEmail, error) {
+	rows, err := q.db.Query(ctx, getUserEmails, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +336,6 @@ func (q *Queries) GetUserEmails(ctx context.Context, userID int64) ([]UserEmail,
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
 			&i.UserID,
 			&i.Email,
 			&i.ConfirmedAt,
@@ -387,9 +344,6 @@ func (q *Queries) GetUserEmails(ctx context.Context, userID int64) ([]UserEmail,
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -397,20 +351,19 @@ func (q *Queries) GetUserEmails(ctx context.Context, userID int64) ([]UserEmail,
 }
 
 const getUserLatestDisplayName = `-- name: GetUserLatestDisplayName :one
-select id, created_at, deleted_at, user_id, display_name
+select id, created_at, user_id, display_name
 from user_display_name udn
-where udn.user_id = ? and udn.deleted_at is null
+where udn.user_id = $1
 order by udn.created_at desc
 limit 1
 `
 
-func (q *Queries) GetUserLatestDisplayName(ctx context.Context, userID int64) (UserDisplayName, error) {
-	row := q.db.QueryRowContext(ctx, getUserLatestDisplayName, userID)
+func (q *Queries) GetUserLatestDisplayName(ctx context.Context, userID int32) (UserDisplayName, error) {
+	row := q.db.QueryRow(ctx, getUserLatestDisplayName, userID)
 	var i UserDisplayName
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
-		&i.DeletedAt,
 		&i.UserID,
 		&i.DisplayName,
 	)
@@ -421,22 +374,18 @@ const getUserRecentAchievements = `-- name: GetUserRecentAchievements :many
 select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
-     join user u on ap.user_id = u.id
+     join users u on ap.user_id = u.id
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
-where u.slug = ?2
+where u.slug = $2
   and ap.progress >= a.progress_requirement
-  and u.deleted_at is null
-  and g.deleted_at is null
-  and a.deleted_at is null
-  and ap.deleted_at is null
 order by ap.created_at desc
-limit ?
+limit $1
 `
 
 type GetUserRecentAchievementsParams struct {
+	Limit    int32
 	UserSlug string
-	Limit    int64
 }
 
 type GetUserRecentAchievementsRow struct {
@@ -449,7 +398,7 @@ type GetUserRecentAchievementsRow struct {
 }
 
 func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRecentAchievementsParams) ([]GetUserRecentAchievementsRow, error) {
-	rows, err := q.db.QueryContext(ctx, getUserRecentAchievements, arg.UserSlug, arg.Limit)
+	rows, err := q.db.Query(ctx, getUserRecentAchievements, arg.Limit, arg.UserSlug)
 	if err != nil {
 		return nil, err
 	}
@@ -468,9 +417,6 @@ func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRece
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

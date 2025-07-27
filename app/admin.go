@@ -299,8 +299,8 @@ func viewAdminGamesRead(ctx *fiber.Ctx) error {
 	}
 
 	game, gameErr := Queries.FindGameBySlug(ctx.Context(), query.FindGameBySlugParams{
-		DevSlug: devSlug,
-		Slug:    gameSlug,
+		DevSlug:  devSlug,
+		GameSlug: gameSlug,
 	})
 
 	foundGame := true
@@ -354,7 +354,7 @@ func viewAdminGameAchievementsRead(ctx *fiber.Ctx) error {
 	achievement, achievementErr := Queries.FindAchievementBySlug(ctx.Context(), query.FindAchievementBySlugParams{
 		DevSlug:  devSlug,
 		GameSlug: gameSlug,
-		Slug:     achievementSlug,
+		AchSlug:  achievementSlug,
 	})
 
 	foundAchievement := true
@@ -409,7 +409,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 	var request struct {
 		Name                string `json:"name"`
 		Description         string `json:"description"`
-		ProgressRequirement int64  `json:"progressRequirement"`
+		ProgressRequirement int32  `json:"progressRequirement"`
 	}
 
 	if bodyErr := ctx.BodyParser(&request); bodyErr != nil {
@@ -424,8 +424,8 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 	}
 
 	game, gameErr := Queries.FindGameBySlug(ctx.Context(), query.FindGameBySlugParams{
-		DevSlug: devSlug,
-		Slug:    gameSlug,
+		DevSlug:  devSlug,
+		GameSlug: gameSlug,
 	})
 
 	if errors.Is(gameErr, sql.ErrNoRows) {
@@ -450,7 +450,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 		return ctx.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	if isNew == 1 {
+	if isNew {
 		newLocation, routeErr := ctx.GetRouteURL("readAchievement", fiber.Map{"devSlug": devSlug, "gameSlug": gameSlug, "achievementSlug": achievementSlug})
 		if routeErr == nil {
 			ctx.Location(newLocation)

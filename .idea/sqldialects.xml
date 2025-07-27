@@ -3,6 +3,10 @@
   <component name="SqlDialectMappings">
     <file url="file://$PROJECT_DIR$/app/migrations/20250715214445_initial-schema.down.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/app/migrations/20250715214445_initial-schema.up.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/app/queries/achievement.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/app/queries/developer.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/app/queries/game.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/app/queries/user.sql" dialect="PostgreSQL" />
     <file url="PROJECT" dialect="SQLite" />
   </component>
 </project>

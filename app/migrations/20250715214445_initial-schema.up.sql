@@ -21,12 +21,12 @@ $$ language sql;
 Example soft-delete query using deleted_record table:
 
 with deleted AS (
-    delete from user
+    delete from users
     where id = ?
     returning *
 )
 insert into deleted_record(source_table, source_id, data)
-select 'user', id, to_jsonb(deleted.*)
+select 'users', id, to_jsonb(deleted.*)
 from deleted
 returning *;
 */
@@ -39,21 +39,27 @@ create table if not exists deleted_record
     data         jsonb       not null
 );
 
-create table if not exists "user"
+create table if not exists users
 (
+
     id         serial primary key,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
     slug       text        not null unique
 );
-create trigger user_moddatetime
-    before update on "user" for each row execute procedure moddatetime(updated_at);
+create or replace trigger users_moddatetime
+    before update
+    on users
+    for each row
+execute function moddatetime(updated_at);
+
+comment on table users is 'openstats users. table is plural to avoid name collision with pg `user` keyword.';
 
 create table if not exists user_slug_history
 (
     id         serial primary key,
     created_at timestamptz not null default now(),
-    user_id    integer references "user",
+    user_id    integer     not null references users,
     slug       text        not null
 );
 
@@ -62,18 +68,21 @@ create table if not exists user_email
     id           serial primary key,
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now(),
-    user_id      integer references "user",
+    user_id      integer     not null references users,
     email        text        not null,
     confirmed_at timestamptz
 );
-create trigger user_email_moddatetime
-    before update on user_email for each row execute procedure moddatetime(updated_at);
+create or replace trigger user_email_moddatetime
+    before update
+    on user_email
+    for each row
+execute function moddatetime(updated_at);
 
 create table if not exists user_display_name
 (
     id           serial primary key,
     created_at   timestamptz not null default now(),
-    user_id      integer references "user",
+    user_id      integer     not null references users,
     display_name text        not null
 );
 
@@ -82,11 +91,14 @@ create table if not exists user_password
     id           serial primary key,
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now(),
-    user_id      integer references "user",
+    user_id      integer     not null references users,
     encoded_hash text        not null
 );
-create trigger user_password_moddatetime
-    before update on user_password for each row execute procedure moddatetime(updated_at);
+create or replace trigger user_password_moddatetime
+    before update
+    on user_password
+    for each row
+execute function moddatetime(updated_at);
 
 create table if not exists developer
 (
@@ -95,22 +107,25 @@ create table if not exists developer
     updated_at timestamptz not null default now(),
     slug       text        not null unique
 );
-create trigger developer_moddatetime
-    before update on developer for each row execute procedure moddatetime(updated_at);
+create or replace trigger developer_moddatetime
+    before update
+    on developer
+    for each row
+execute function moddatetime(updated_at);
 
 create table if not exists developer_member
 (
     id           serial primary key,
     created_at   timestamptz not null default now(),
-    user_id      integer references "user",
-    developer_id integer references developer
+    user_id      integer     not null references users,
+    developer_id integer     not null references developer
 );
 
-create table if not exists developer_slug
+create table if not exists developer_slug_history
 (
     id           serial primary key,
     created_at   timestamptz not null default now(),
-    developer_id integer references developer,
+    developer_id integer     not null references developer,
     slug         text        not null
 );
 
@@ -118,7 +133,7 @@ create table if not exists developer_display_name
 (
     id           serial primary key,
     created_at   timestamptz not null default now(),
-    developer_id integer references developer,
+    developer_id integer     not null references developer,
     display_name text        not null
 );
 
@@ -127,28 +142,23 @@ create table if not exists game
     id           serial primary key,
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now(),
-    developer_id integer references developer,
+    developer_id integer     not null references developer,
     slug         text        not null,
 
     unique (developer_id, slug)
 );
-create trigger game_moddatetime
-    before update on game for each row execute procedure moddatetime(updated_at);
-
-create table if not exists game_slug
-(
-    id         serial primary key,
-    created_at timestamptz not null default now(),
-    game_id    integer references game,
-    slug       text        not null
-);
+create or replace trigger game_moddatetime
+    before update
+    on game
+    for each row
+execute function moddatetime(updated_at);
 
 create table if not exists achievement
 (
     id                   serial primary key,
     created_at           timestamptz not null default now(),
     updated_at           timestamptz not null default now(),
-    game_id              integer references game,
+    game_id              integer     not null references game,
     slug                 text        not null,
     name                 text        not null,
     description          text        not null,
@@ -159,8 +169,8 @@ create table if not exists achievement_progress
 (
     created_at     timestamptz not null default now(),
     updated_at     timestamptz not null default now(),
-    user_id        integer references "user",
-    achievement_id integer references "user",
+    user_id        integer     not null references users,
+    achievement_id integer     not null references achievement,
     progress       integer     not null,
 
     primary key (user_id, achievement_id)
@@ -215,6 +225,6 @@ create table if not exists game_session
     token_id      uuid references token,
     -- last time a pulse was received by the game
     last_pulse_at timestamptz not null default now(),
-    game_id       integer references game,
-    user_id       integer references "user"
+    game_id       integer     not null references game,
+    user_id       integer     not null references users
 );

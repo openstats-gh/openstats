@@ -7,17 +7,16 @@ package query
 
 import (
 	"context"
-	"database/sql"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const allDevelopers = `-- name: AllDevelopers :many
-select id, created_at, updated_at, deleted_at, slug
-from developer
+select id, created_at, updated_at, slug from developer
 `
 
 func (q *Queries) AllDevelopers(ctx context.Context) ([]Developer, error) {
-	rows, err := q.db.QueryContext(ctx, allDevelopers)
+	rows, err := q.db.Query(ctx, allDevelopers)
 	if err != nil {
 		return nil, err
 	}
@@ -29,15 +28,11 @@ func (q *Queries) AllDevelopers(ctx context.Context) ([]Developer, error) {
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
 			&i.Slug,
 		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -46,39 +41,32 @@ func (q *Queries) AllDevelopers(ctx context.Context) ([]Developer, error) {
 }
 
 const findDeveloperBySlug = `-- name: FindDeveloperBySlug :one
-select id, created_at, updated_at, deleted_at, slug
-from developer
-where slug = ?
-limit 1
+select id, created_at, updated_at, slug from developer where slug = $1 limit 1
 `
 
 func (q *Queries) FindDeveloperBySlug(ctx context.Context, slug string) (Developer, error) {
-	row := q.db.QueryRowContext(ctx, findDeveloperBySlug, slug)
+	row := q.db.QueryRow(ctx, findDeveloperBySlug, slug)
 	var i Developer
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const getDeveloperGames = `-- name: GetDeveloperGames :many
-select game.slug, game.created_at, game.deleted_at
-from game
-where developer_id = ?
+select game.slug, game.created_at from game where developer_id = $1
 `
 
 type GetDeveloperGamesRow struct {
 	Slug      string
-	CreatedAt time.Time
-	DeletedAt sql.NullTime
+	CreatedAt pgtype.Timestamptz
 }
 
-func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int64) ([]GetDeveloperGamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, getDeveloperGames, developerID)
+func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int32) ([]GetDeveloperGamesRow, error) {
+	rows, err := q.db.Query(ctx, getDeveloperGames, developerID)
 	if err != nil {
 		return nil, err
 	}
@@ -86,13 +74,10 @@ func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int64) ([]G
 	var items []GetDeveloperGamesRow
 	for rows.Next() {
 		var i GetDeveloperGamesRow
-		if err := rows.Scan(&i.Slug, &i.CreatedAt, &i.DeletedAt); err != nil {
+		if err := rows.Scan(&i.Slug, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -101,25 +86,24 @@ func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int64) ([]G
 }
 
 const getDeveloperMembers = `-- name: GetDeveloperMembers :many
-select u.slug, udn1.display_name, dm.created_at as joined_at, dm.deleted_at as left_at
-from user u
+select u.slug, udn1.display_name, dm.created_at as joined_at
+from users u
 join developer_member dm on u.id = dm.user_id
-left outer join user_display_name udn1 on u.id = udn1.user_id and udn1.deleted_at is null
-left outer join user_display_name udn2 on u.id = udn2.user_id and udn2.deleted_at is null and
+left outer join user_display_name udn1 on u.id = udn1.user_id
+left outer join user_display_name udn2 on u.id = udn2.user_id and
                                           (udn1.created_at < udn2.created_at or
                                            (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
-where dm.developer_id = ?
+where dm.developer_id = $1
 `
 
 type GetDeveloperMembersRow struct {
 	Slug        string
-	DisplayName sql.NullString
-	JoinedAt    time.Time
-	LeftAt      sql.NullTime
+	DisplayName pgtype.Text
+	JoinedAt    pgtype.Timestamptz
 }
 
-func (q *Queries) GetDeveloperMembers(ctx context.Context, developerID int64) ([]GetDeveloperMembersRow, error) {
-	rows, err := q.db.QueryContext(ctx, getDeveloperMembers, developerID)
+func (q *Queries) GetDeveloperMembers(ctx context.Context, developerID int32) ([]GetDeveloperMembersRow, error) {
+	rows, err := q.db.Query(ctx, getDeveloperMembers, developerID)
 	if err != nil {
 		return nil, err
 	}
@@ -127,18 +111,10 @@ func (q *Queries) GetDeveloperMembers(ctx context.Context, developerID int64) ([
 	var items []GetDeveloperMembersRow
 	for rows.Next() {
 		var i GetDeveloperMembersRow
-		if err := rows.Scan(
-			&i.Slug,
-			&i.DisplayName,
-			&i.JoinedAt,
-			&i.LeftAt,
-		); err != nil {
+		if err := rows.Scan(&i.Slug, &i.DisplayName, &i.JoinedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

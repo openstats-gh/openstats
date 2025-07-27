@@ -5,110 +5,131 @@
 package query
 
 import (
-	"database/sql"
-	"time"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Achievement struct {
-	ID                  int64
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
-	DeletedAt           sql.NullTime
-	GameID              int64
+	ID                  int32
+	CreatedAt           pgtype.Timestamptz
+	UpdatedAt           pgtype.Timestamptz
+	GameID              int32
 	Slug                string
 	Name                string
 	Description         string
-	ProgressRequirement int64
+	ProgressRequirement int32
 }
 
 type AchievementProgress struct {
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	DeletedAt     sql.NullTime
-	UserID        int64
-	AchievementID int64
-	Progress      int64
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	UserID        int32
+	AchievementID int32
+	Progress      int32
+}
+
+type DeletedRecord struct {
+	ID          pgtype.UUID
+	DeletedAt   pgtype.Timestamptz
+	SourceTable string
+	SourceID    string
+	Data        []byte
 }
 
 type Developer struct {
-	ID        int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt sql.NullTime
+	ID        int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 	Slug      string
 }
 
-type DeveloperMember struct {
-	ID          int64
-	CreatedAt   time.Time
-	DeletedAt   sql.NullTime
-	UserID      int64
-	DeveloperID int64
+type DeveloperDisplayName struct {
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	DeveloperID int32
+	DisplayName string
 }
 
-type DeveloperSlug struct {
-	ID          int64
-	CreatedAt   time.Time
-	DeletedAt   sql.NullTime
-	DeveloperID int64
+type DeveloperMember struct {
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UserID      int32
+	DeveloperID int32
+}
+
+type DeveloperSlugHistory struct {
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	DeveloperID int32
 	Slug        string
 }
 
 type Game struct {
-	ID          int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   sql.NullTime
-	DeveloperID int64
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	DeveloperID int32
 	Slug        string
 }
 
-type GameSlug struct {
-	ID        int64
-	CreatedAt time.Time
-	DeletedAt sql.NullTime
-	GameID    int64
-	Slug      string
+type GameSession struct {
+	ID          pgtype.UUID
+	CreatedAt   pgtype.Timestamptz
+	TokenID     pgtype.UUID
+	LastPulseAt pgtype.Timestamptz
+	GameID      int32
+	UserID      int32
 }
 
+type Token struct {
+	ID        pgtype.UUID
+	Issuer    string
+	Subject   string
+	Audience  string
+	ExpiresAt pgtype.Timestamptz
+	NotBefore pgtype.Timestamptz
+	IssuedAt  pgtype.Timestamptz
+}
+
+type TokenDisallowList struct {
+	TokenID   pgtype.UUID
+	CreatedAt pgtype.Timestamptz
+}
+
+// openstats users. table is plural to avoid name collision with pg `user` keyword.
 type User struct {
-	ID        int64
-	CreatedAt time.Time
-	UpdatedAt time.Time
-	DeletedAt sql.NullTime
+	ID        int32
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 	Slug      string
 }
 
 type UserDisplayName struct {
-	ID          int64
-	CreatedAt   time.Time
-	DeletedAt   sql.NullTime
-	UserID      int64
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UserID      int32
 	DisplayName string
 }
 
 type UserEmail struct {
-	ID          int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	DeletedAt   sql.NullTime
-	UserID      int64
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	UserID      int32
 	Email       string
-	ConfirmedAt sql.NullTime
+	ConfirmedAt pgtype.Timestamptz
 }
 
 type UserPassword struct {
-	ID          int64
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
-	UserID      int64
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+	UserID      int32
 	EncodedHash string
 }
 
-type UserSlug struct {
-	ID        int64
-	CreatedAt time.Time
-	DeletedAt sql.NullTime
-	UserID    int64
+type UserSlugHistory struct {
+	ID        int32
+	CreatedAt pgtype.Timestamptz
+	UserID    int32
 	Slug      string
 }

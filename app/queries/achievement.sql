@@ -3,14 +3,14 @@ select a.*
 from achievement a
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
-where a.slug = ?
-  and d.slug = sqlc.arg(dev_slug)
-  and g.slug = sqlc.arg(game_slug)
+where a.slug = @ach_slug
+  and d.slug = @dev_slug
+  and g.slug = @game_slug
 limit 1;
 
 -- name: UpsertAchievement :one
-insert into achievement (updated_at, game_id, slug, name, description, progress_requirement)
-values (datetime('now'), ?, ?, ?, ?, ?)
+insert into achievement (game_id, slug, name, description, progress_requirement)
+values ($1, $2, $3, $4, $5)
 on conflict(game_id, slug)
     do update set name=excluded.name,
                   description=excluded.description,

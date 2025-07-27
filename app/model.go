@@ -1,7 +1,8 @@
 package main
 
 import (
-	"database/sql"
+	"context"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/dresswithpockets/openstats/app/queries"
 	"github.com/dresswithpockets/openstats/app/query"
@@ -10,13 +11,13 @@ import (
 var Queries *query.Queries
 var Actions *queries.Actions
 
-func SetupDB() error {
-	db, dbErr := sql.Open("sqlite3", "local.openstats.db")
-	if dbErr != nil {
-		return dbErr
+func SetupDB(ctx context.Context) error {
+	conn, connErr := pgx.Connect(ctx, "host=localhost port=15432 database=openstats user=openstats password=openstats")
+	if connErr != nil {
+		return connErr
 	}
 
-	Queries = query.New(db)
-	Actions = queries.NewActions(db, Queries)
+	Queries = query.New(conn)
+	Actions = queries.NewActions(conn, Queries)
 	return nil
 }

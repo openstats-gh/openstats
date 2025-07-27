@@ -7,9 +7,7 @@ from game
 select game.*
 from game
      join developer on game.developer_id = developer.id
-where game.slug = ? and developer.slug = sqlc.arg(dev_slug);
+where game.slug = @game_slug and developer.slug = @dev_slug;
 
 -- name: GetGameAchievements :many
-select *
-from achievement
-where game_id = ?;
+select * from achievement where game_id = $1;

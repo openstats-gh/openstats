@@ -7,28 +7,27 @@ package query
 
 import (
 	"context"
-	"database/sql"
-	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const allGames = `-- name: AllGames :many
-select game.id, game.created_at, game.updated_at, game.deleted_at, game.developer_id, game.slug, developer.slug as developer_slug
+select game.id, game.created_at, game.updated_at, game.developer_id, game.slug, developer.slug as developer_slug
 from game
      join developer on game.developer_id = developer.id
 `
 
 type AllGamesRow struct {
-	ID            int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
-	DeletedAt     sql.NullTime
-	DeveloperID   int64
+	ID            int32
+	CreatedAt     pgtype.Timestamptz
+	UpdatedAt     pgtype.Timestamptz
+	DeveloperID   int32
 	Slug          string
 	DeveloperSlug string
 }
 
 func (q *Queries) AllGames(ctx context.Context) ([]AllGamesRow, error) {
-	rows, err := q.db.QueryContext(ctx, allGames)
+	rows, err := q.db.Query(ctx, allGames)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +39,6 @@ func (q *Queries) AllGames(ctx context.Context) ([]AllGamesRow, error) {
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
 			&i.DeveloperID,
 			&i.Slug,
 			&i.DeveloperSlug,
@@ -49,9 +47,6 @@ func (q *Queries) AllGames(ctx context.Context) ([]AllGamesRow, error) {
 		}
 		items = append(items, i)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
@@ -59,25 +54,24 @@ func (q *Queries) AllGames(ctx context.Context) ([]AllGamesRow, error) {
 }
 
 const findGameBySlug = `-- name: FindGameBySlug :one
-select game.id, game.created_at, game.updated_at, game.deleted_at, game.developer_id, game.slug
+select game.id, game.created_at, game.updated_at, game.developer_id, game.slug
 from game
      join developer on game.developer_id = developer.id
-where game.slug = ? and developer.slug = ?2
+where game.slug = $1 and developer.slug = $2
 `
 
 type FindGameBySlugParams struct {
-	Slug    string
-	DevSlug string
+	GameSlug string
+	DevSlug  string
 }
 
 func (q *Queries) FindGameBySlug(ctx context.Context, arg FindGameBySlugParams) (Game, error) {
-	row := q.db.QueryRowContext(ctx, findGameBySlug, arg.Slug, arg.DevSlug)
+	row := q.db.QueryRow(ctx, findGameBySlug, arg.GameSlug, arg.DevSlug)
 	var i Game
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.DeletedAt,
 		&i.DeveloperID,
 		&i.Slug,
 	)
@@ -85,13 +79,11 @@ func (q *Queries) FindGameBySlug(ctx context.Context, arg FindGameBySlugParams) 
 }
 
 const getGameAchievements = `-- name: GetGameAchievements :many
-select id, created_at, updated_at, deleted_at, game_id, slug, name, description, progress_requirement
-from achievement
-where game_id = ?
+select id, created_at, updated_at, game_id, slug, name, description, progress_requirement from achievement where game_id = $1
 `
 
-func (q *Queries) GetGameAchievements(ctx context.Context, gameID int64) ([]Achievement, error) {
-	rows, err := q.db.QueryContext(ctx, getGameAchievements, gameID)
+func (q *Queries) GetGameAchievements(ctx context.Context, gameID int32) ([]Achievement, error) {
+	rows, err := q.db.Query(ctx, getGameAchievements, gameID)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +95,6 @@ func (q *Queries) GetGameAchievements(ctx context.Context, gameID int64) ([]Achi
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.DeletedAt,
 			&i.GameID,
 			&i.Slug,
 			&i.Name,
@@ -113,9 +104,6 @@ func (q *Queries) GetGameAchievements(ctx context.Context, gameID int64) ([]Achi
 			return nil, err
 		}
 		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

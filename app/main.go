@@ -52,7 +52,7 @@ type RegisterDto struct {
 }
 
 func main() {
-	if err := SetupDB(); err != nil {
+	if err := SetupDB(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 

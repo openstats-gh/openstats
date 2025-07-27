@@ -2,9 +2,9 @@ package queries
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"github.com/dresswithpockets/openstats/app/query"
+	"github.com/jackc/pgx/v5"
 	"github.com/mattn/go-sqlite3"
 )
 
@@ -12,27 +12,27 @@ var ErrSlugAlreadyInUse = errors.New("slug already in use")
 
 type Actions struct {
 	queries *query.Queries
-	db      *sql.DB
+	conn    *pgx.Conn
 }
 
-func NewActions(db *sql.DB, queries *query.Queries) *Actions {
+func NewActions(conn *pgx.Conn, queries *query.Queries) *Actions {
 	return &Actions{
 		queries: queries,
-		db:      db,
+		conn:    conn,
 	}
 }
 
 func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, email, displayName string) (*query.User, error) {
-	tx, txErr := a.db.BeginTx(ctx, nil)
+	tx, txErr := a.conn.BeginTx(ctx, pgx.TxOptions{})
 	if txErr != nil {
 		return nil, txErr
 	}
 
 	//goland:noinspection GoUnhandledErrorResult
-	defer tx.Rollback()
+	defer tx.Rollback(ctx)
 
 	qtx := a.queries.WithTx(tx)
-	user, createUserErr := qtx.CreateUser(ctx, slug)
+	user, createUserErr := qtx.AddUser(ctx, slug)
 	if errors.Is(createUserErr, sqlite3.ErrConstraintUnique) {
 		return nil, ErrSlugAlreadyInUse
 	}
@@ -41,14 +41,14 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 		return nil, createUserErr
 	}
 
-	if err := qtx.AddUserSlugRecord(ctx, query.AddUserSlugRecordParams{
+	if err := qtx.AddUserSlugHistory(ctx, query.AddUserSlugHistoryParams{
 		UserID: user.ID,
 		Slug:   slug,
 	}); err != nil {
 		return nil, err
 	}
 
-	if err := qtx.CreateUserPassword(ctx, query.CreateUserPasswordParams{
+	if err := qtx.AddUserPassword(ctx, query.AddUserPasswordParams{
 		UserID:      user.ID,
 		EncodedHash: encodedPasswordHash,
 	}); err != nil {
@@ -73,7 +73,7 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 		}
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 

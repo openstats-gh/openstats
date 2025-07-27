@@ -27,12 +27,12 @@ type Session struct {
 	session *session.Session
 }
 
-func (s Session) GetUserID() (int64, bool) {
-	userId, ok := s.session.Get("UserID").(int64)
+func (s Session) GetUserID() (int32, bool) {
+	userId, ok := s.session.Get("UserID").(int32)
 	return userId, ok
 }
 
-func (s Session) SetUserID(id int64) {
+func (s Session) SetUserID(id int32) {
 	s.session.Set("UserID", id)
 }
 
