@@ -119,6 +119,13 @@ type UserEmail struct {
 	ConfirmedAt pgtype.Timestamptz
 }
 
+type UserLatestDisplayName struct {
+	ID          int32
+	CreatedAt   pgtype.Timestamptz
+	UserID      int32
+	DisplayName string
+}
+
 type UserPassword struct {
 	ID          int32
 	CreatedAt   pgtype.Timestamptz

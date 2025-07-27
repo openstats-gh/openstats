@@ -84,13 +84,9 @@ func (q *Queries) AddUserSlugHistory(ctx context.Context, arg AddUserSlugHistory
 }
 
 const allUsersWithDisplayNames = `-- name: AllUsersWithDisplayNames :many
-select u.id, u.created_at, u.updated_at, u.slug, udn1.display_name
+select u.id, u.created_at, u.updated_at, u.slug, uldn.display_name
 from users u
-     left outer join user_display_name udn1 on u.id = udn1.user_id
-     left outer join user_display_name udn2 on u.id = udn2.user_id and
-                                               (udn1.created_at < udn2.created_at or
-                                                (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
-where udn2.id is null
+    left outer join user_latest_display_name uldn on u.id = uldn.user_id
 `
 
 type AllUsersWithDisplayNamesRow struct {
@@ -192,16 +188,13 @@ func (q *Queries) FindUserBySlugWithPassword(ctx context.Context, slug string) (
 }
 
 const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements :many
-select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.slug as user_slug, udn1.display_name as user_display_name
+select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.slug as user_slug, uldn.display_name as user_display_name
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
      join users u on ap.user_id = u.id
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
-     left outer join user_display_name udn1 on u.id = udn1.user_id
-     left outer join user_display_name udn2 on u.id = udn2.user_id and
-                                               (udn1.created_at < udn2.created_at or
-                                                (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
+     left outer join user_latest_display_name uldn on u.id = uldn.user_id
 where u.slug != $2
   and ap.progress >= a.progress_requirement
 order by ap.created_at desc

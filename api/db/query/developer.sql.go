@@ -86,13 +86,10 @@ func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int32) ([]G
 }
 
 const getDeveloperMembers = `-- name: GetDeveloperMembers :many
-select u.slug, udn1.display_name, dm.created_at as joined_at
+select u.slug, uldn.display_name, dm.created_at as joined_at
 from users u
 join developer_member dm on u.id = dm.user_id
-left outer join user_display_name udn1 on u.id = udn1.user_id
-left outer join user_display_name udn2 on u.id = udn2.user_id and
-                                          (udn1.created_at < udn2.created_at or
-                                           (udn1.created_at = udn2.created_at and udn1.id < udn2.id))
+left outer join user_latest_display_name uldn on u.id = uldn.user_id
 where dm.developer_id = $1
 `
 
