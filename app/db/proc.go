@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/jackc/pgx/v5"
-	"github.com/mattn/go-sqlite3"
 )
 
 var ErrSlugAlreadyInUse = errors.New("slug already in use")
@@ -33,7 +32,8 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 
 	qtx := a.queries.WithTx(tx)
 	user, createUserErr := qtx.AddUser(ctx, slug)
-	if errors.Is(createUserErr, sqlite3.ErrConstraintUnique) {
+
+	if IsUniqueConstraintErr(createUserErr) {
 		return nil, ErrSlugAlreadyInUse
 	}
 
