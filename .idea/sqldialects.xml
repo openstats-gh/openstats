@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="SqlDialectMappings">
+    <file url="file://$PROJECT_DIR$/app/db/migrations/20250715214445_initial-schema.down.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/app/db/migrations/20250715214445_initial-schema.up.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/app/db/sql/achievement.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/app/db/sql/developer.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/app/db/sql/game.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/app/db/sql/user.sql" dialect="PostgreSQL" />
-    <file url="file://$PROJECT_DIR$/app/migrations/20250715214445_initial-schema.down.sql" dialect="PostgreSQL" />
-    <file url="file://$PROJECT_DIR$/app/migrations/20250715214445_initial-schema.up.sql" dialect="PostgreSQL" />
     <file url="PROJECT" dialect="SQLite" />
   </component>
 </project>
