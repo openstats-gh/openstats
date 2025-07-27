@@ -152,3 +152,63 @@ go generate
 ```
 
 See the [sqlc docs](https://docs.sqlc.dev/en/v1.29.0/) for more information on query annotations, parameterization, etc.
+
+### Using `sqlc`-generated code
+
+Each table gets its own struct, and each query gets its own function. If the function is parameterized with multiple parameters, then it'll get a params struct.
+
+Given this query:
+
+```sql
+-- name: AddOrUpdateAchievement :one
+insert into achievement (game_id, slug, name, description, progress_requirement)
+values ($1, $2, $3, $4, $5)
+on conflict(game_id, slug)
+    do update set name=excluded.name,
+                  description=excluded.description,
+                  progress_requirement=excluded.progress_requirement
+returning case when achievement.created_at == achievement.updated_at then true else false end as is_new;
+```
+
+Usage might look like this:
+
+```go
+isNew, createErr := Queries.AddOrUpdateAchievement(ctx.Context(), query.AddOrUpdateAchievementParams{
+    GameID:              game.ID,
+    Slug:                achievementSlug,
+    Name:                request.Name,
+    Description:         request.Description,
+    ProgressRequirement: request.ProgressRequirement,
+})
+
+if createErr != nil {
+    log.Error(createErr)
+    return ctx.SendStatus(fiber.StatusInternalServerError)
+}
+
+if isNew {
+    newLocation, routeErr := ctx.GetRouteURL("readAchievement", fiber.Map{"devSlug": devSlug, "gameSlug": gameSlug, "achievementSlug": achievementSlug})
+    if routeErr == nil {
+        ctx.Location(newLocation)
+    }
+    return ctx.SendStatus(fiber.StatusCreated)
+}
+```
+
+If a query returns an entire table, e.g.:
+
+```sql
+-- name: FindUser :one
+select * from users where id = $1 limit 1;
+```
+
+Then a fully type-qualified usage would look like this:
+
+```go
+import (
+	"github.com/dresswithpockets/openstats/app/db/query"
+)
+
+// ...
+    var user query.User, err error = Queries.FindUser(c.Context(), userId)
+```
