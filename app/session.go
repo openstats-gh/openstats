@@ -4,7 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/fiber/v2/utils"
-	sqliteStorage "github.com/gofiber/storage/sqlite3/v2"
+	pgStorage "github.com/gofiber/storage/postgres/v3"
 	"time"
 )
 
@@ -46,8 +46,15 @@ func (s Session) Destroy() error {
 
 var SessionStore = &SessionConfig{
 	sessionStore: session.New(session.Config{
-		Expiration:   7 * 24 * time.Hour,
-		Storage:      sqliteStorage.New(sqliteStorage.Config{}),
+		Expiration: 7 * 24 * time.Hour,
+		Storage: pgStorage.New(pgStorage.Config{
+			Host:     "localhost",
+			Port:     15432,
+			Username: "openstats",
+			Password: "openstats",
+			Database: "openstats",
+			Table:    "user_fiber_session",
+		}),
 		CookieSecure: true,
 		KeyGenerator: utils.UUIDv4,
 	}),
