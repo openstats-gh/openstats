@@ -106,15 +106,49 @@ npm run dev
 
 ### Create a migration
 
+In `api` as current working directory.
+
 Its fine to test changes to the database schema ad-hoc without creating a migration. However, if you intend to commit
 your changes, you must create a migration:
 
 ```shell
-migrate create -ext sql -dir migrations a-summary-of-your-changes
+migrate create -ext sql -dir db/migrations a-summary-of-your-changes
 ```
+
+After writing your DDL for the new migration, regenerate Go models based on your changes:
+
+```shell
+go generate
+```
+
+See [Add a SQL Query](#add-a-sql-query) for more information on how we generate models & queries.
 
 ### Run migrations 
 
+In `api` as current working directory.
+
 ```shell
-migrate -source file://migrations -database postgres://openstats:openstats@localhost:15432/openstats?sslmode=disable u
+migrate -source file://db/migrations -database postgres://openstats:openstats@localhost:15432/openstats?sslmode=disable u
 ```
+
+### Add a SQL Query
+
+We use [sqlc](https://sqlc.dev) to generate structs and functions for each table and query. sqlc is configured in [api/sqlc.yaml](./api/sqlc.yaml) to look for migrations at [api/db/migrations](./api/db/migrations/), and for queries at [api/db/sql](./api/db/sql).
+
+Each sql file may hold many queries, and each query is separated by a comment like this:
+
+```sql
+-- name: FindUser :one
+select * from users where id = $1 limit 1;
+
+-- name: FindUserBySlug :one
+select * from users where id = $1 limit 1;
+```
+
+To generate the Go code after making changes or after adding a new query, run this with `api` as your working directory:
+
+```shell
+go generate
+```
+
+See the [sqlc docs](https://docs.sqlc.dev/en/v1.29.0/) for more information on query annotations, parameterization, etc.
