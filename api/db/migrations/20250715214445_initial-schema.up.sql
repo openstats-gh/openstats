@@ -86,6 +86,15 @@ create table if not exists user_display_name
     display_name text        not null
 );
 
+create index user_display_name_created_at on user_display_name(created_at);
+
+create or replace view user_latest_display_name as
+select udn1.*
+from user_display_name udn1
+     left outer join user_display_name udn2 on udn1.id = udn2.user_id and
+                                               (udn1.created_at < udn2.created_at or
+                                                (udn1.created_at = udn2.created_at and udn1.id < udn2.id));
+
 create table if not exists user_password
 (
     id           serial primary key,
