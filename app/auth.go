@@ -4,11 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/dresswithpockets/openstats/app/db"
+	"github.com/dresswithpockets/openstats/app/db/query"
 	"log"
 
 	"github.com/dresswithpockets/openstats/app/password"
-	"github.com/dresswithpockets/openstats/app/queries"
-	"github.com/dresswithpockets/openstats/app/query"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -214,7 +214,7 @@ func handlePostRegisterView(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
-		if errors.Is(newUserError, queries.ErrSlugAlreadyInUse) {
+		if errors.Is(newUserError, db.ErrSlugAlreadyInUse) {
 			return c.SendStatus(fiber.StatusConflict)
 		}
 

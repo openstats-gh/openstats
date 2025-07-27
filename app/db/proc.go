@@ -1,9 +1,9 @@
-package queries
+package db
 
 import (
 	"context"
 	"errors"
-	"github.com/dresswithpockets/openstats/app/query"
+	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/jackc/pgx/v5"
 	"github.com/mattn/go-sqlite3"
 )

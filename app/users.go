@@ -3,8 +3,8 @@ package main
 import (
 	"database/sql"
 	"errors"
+	"github.com/dresswithpockets/openstats/app/db/query"
 
-	"github.com/dresswithpockets/openstats/app/query"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 )

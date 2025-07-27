@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/dresswithpockets/openstats/app/query"
+	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/gofiber/fiber/v2"
 )
 

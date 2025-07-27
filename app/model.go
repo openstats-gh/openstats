@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
+	"github.com/dresswithpockets/openstats/app/db"
+	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/jackc/pgx/v5"
-
-	"github.com/dresswithpockets/openstats/app/queries"
-	"github.com/dresswithpockets/openstats/app/query"
 )
 
 var Queries *query.Queries
-var Actions *queries.Actions
+var Actions *db.Actions
 
 func SetupDB(ctx context.Context) error {
 	conn, connErr := pgx.Connect(ctx, "host=localhost port=15432 database=openstats user=openstats password=openstats")
@@ -18,6 +17,6 @@ func SetupDB(ctx context.Context) error {
 	}
 
 	Queries = query.New(conn)
-	Actions = queries.NewActions(conn, Queries)
+	Actions = db.NewActions(conn, Queries)
 	return nil
 }

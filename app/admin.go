@@ -4,8 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/dresswithpockets/openstats/app/queries"
-	"github.com/dresswithpockets/openstats/app/query"
+	"github.com/dresswithpockets/openstats/app/db"
+	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/log"
 )
@@ -21,7 +21,7 @@ func AddRootAdminUser(ctx context.Context) {
 	_, newUserErr := AddNewUser(ctx, RootUserDisplayName, RootUserEmail, RootUserSlug, RootUserPass)
 	// this function is expected to be idempotent - if called multiple times, it shouldn't fail even if the admin
 	// already exists
-	if newUserErr != nil && !errors.Is(newUserErr, queries.ErrSlugAlreadyInUse) {
+	if newUserErr != nil && !errors.Is(newUserErr, db.ErrSlugAlreadyInUse) {
 		log.Fatal(newUserErr)
 	}
 }
@@ -193,7 +193,7 @@ func viewAdminUsersCreate(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusBadRequest)
 		}
 
-		if errors.Is(newUserError, queries.ErrSlugAlreadyInUse) {
+		if errors.Is(newUserError, db.ErrSlugAlreadyInUse) {
 			return c.SendStatus(fiber.StatusConflict)
 		}
 
