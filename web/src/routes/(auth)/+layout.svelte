@@ -1,8 +1,10 @@
 <script lang="ts">
-  import "../../app.css";
+    import "../../app.css";
 
-  let { children } = $props();
+    let { children } = $props();
 </script>
 
-{@render children()}
-
+<main>
+  <h1>Openstats</h1>
+  {@render children()}
+</main>
