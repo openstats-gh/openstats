@@ -6,6 +6,7 @@ export const load: PageLoad = async ({ fetch, parent }) => {
     
     if (!parentData.hasSession) {
         // TODO: page shouldnt be loading without a session...
+        return {}
     }
 
     return {

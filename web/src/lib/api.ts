@@ -1,3 +1,8 @@
+export interface SignUpResult {
+    badRequest: boolean;
+    conflict: boolean;
+}
+
 export interface SessionUser {
     slug: string,
     displayName: string,
@@ -24,6 +29,9 @@ export interface OtherUserUnlockedAchievementInfo extends UnlockedAchievementInf
 
 export interface Api {
     with(fetchShim: typeof fetch): Api;
+    signIn(slug: string, password: string): Promise<boolean>;
+    signOut(): Promise<void>;
+    signUp(slug: string, password: string, email: string | null, displayName: string | null): Promise<SignUpResult>;
     getCurrentSession(): Promise<SessionUser | null>;
     getUserPageBrief(userSlug: string): Promise<UserPageBrief>;
 }
@@ -31,6 +39,21 @@ export interface Api {
 export class StubbedApi implements Api {
     with(): Api {
         return this
+    }
+
+    signIn(slug: string, password: string): Promise<boolean> {
+        return Promise.resolve(true)
+    }
+
+    signOut(): Promise<void> {
+        return Promise.resolve()
+    }
+
+    signUp(slug: string, password: string, email: string | null, displayName: string | null): Promise<SignUpResult> {
+        return Promise.resolve({
+            badRequest: false,
+            conflict: false,
+        } as SignUpResult)
     }
 
     getCurrentSession(): Promise<SessionUser | null> {
@@ -42,7 +65,7 @@ export class StubbedApi implements Api {
         // return Promise.resolve(null)
     }
 
-    async getUserPageBrief(): Promise<UserPageBrief> {
+    getUserPageBrief(): Promise<UserPageBrief> {
         const result: UserPageBrief = {
             unlocks: [
                 {
@@ -108,13 +131,60 @@ export class StubbedApi implements Api {
 }
 
 export class LiveApi implements Api {
-    private _fetch: typeof fetch;
+    private readonly _fetch: typeof fetch;
     constructor(fetchShim: typeof fetch) {
         this._fetch = fetchShim
     }
 
     with(fetchShim: typeof fetch): Api {
         return new LiveApi(fetchShim)
+    }
+
+    async signIn(slug: string, password: string): Promise<boolean> {
+        const response = await this._fetch(
+            "/api/auth/sign-in",
+            {
+                method: "POST",
+                headers: new Headers({
+                    "Content-Type": "application/json"
+                }),
+                body: JSON.stringify({
+                    slug: slug,
+                    password: password,
+                })
+            }
+        )
+
+        return response.ok
+    }
+
+    async signOut(): Promise<void> {
+        await this._fetch("/api/auth/sign-out", {method: "POST"})
+    }
+
+    async signUp(slug: string, password: string, email: string | null, displayName: string | null): Promise<SignUpResult> {
+        const response = await this._fetch(
+            "/api/auth/sign-up",
+            {
+                method: "POST",
+                headers: new Headers({
+                    "Content-Type": "application/json"
+                }),
+                body: JSON.stringify({
+                    slug: slug,
+                    password: password,
+                    displayName: displayName ?? undefined,
+                    email: email ?? undefined,
+                })
+            }
+        )
+
+        // TODO: parse problem details
+
+        return {
+            badRequest: response.status === 400,
+            conflict: response.status === 409,
+        } as SignUpResult
     }
 
     async getCurrentSession(): Promise<SessionUser | null> {
@@ -130,14 +200,17 @@ export class LiveApi implements Api {
 
     async getUserPageBrief(userSlug: string): Promise<UserPageBrief> {
         const response = await this._fetch(`/api/users/${userSlug}/brief`)
-        console.log(response)
         // TODO: parse problem details
-        return await response.json()
+
+        const body = await response.json()
+        body.unlocks ??= []
+        body.otherUserUnlocks ??= []
+        return body
     }
 }
 
-// export const api: Api = new LiveApi(fetch);
-export const api: Api = new StubbedApi();
+export const api: Api = new LiveApi(fetch);
+// export const api: Api = new StubbedApi();
 
 export async function getCurrentSession(fetchShim: typeof fetch | undefined = undefined): Promise<SessionUser | null> {
     if (fetchShim === undefined) {
