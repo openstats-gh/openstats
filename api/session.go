@@ -1,11 +1,12 @@
 package main
 
 import (
+	"time"
+
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/fiber/v2/utils"
 	pgStorage "github.com/gofiber/storage/postgres/v3"
-	"time"
 )
 
 type SessionConfig struct {

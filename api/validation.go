@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
-	"github.com/go-playground/validator/v10"
 	"net/mail"
 	"slices"
 	"unicode"
+
+	"github.com/go-playground/validator/v10"
+	"github.com/rotisserie/eris"
 )
 
 var goValidator = validator.New(validator.WithRequiredStructEnabled())
@@ -17,6 +19,13 @@ type ConflictError struct {
 
 func (v *ConflictError) Error() string {
 	return fmt.Sprintf("Conflict on '%s' with value '%s'", v.Field, v.Value)
+}
+
+func Conflict(field string, value string) *ConflictError {
+	return &ConflictError{
+		Field: field,
+		Value: value,
+	}
 }
 
 type ValidationFieldError struct {
@@ -142,4 +151,14 @@ func ValidPassword(password string) bool {
 	}
 
 	return true
+}
+
+func ErrorIsAny(err error, errs ...error) bool {
+	for _, other := range errs {
+		if eris.Is(err, other) {
+			return true
+		}
+	}
+
+	return false
 }

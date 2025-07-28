@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/jackc/pgx/v5"

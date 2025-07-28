@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/problems"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/log"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/favicon"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
@@ -17,6 +17,23 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/limiter"
 	"github.com/gofiber/template/jet/v2"
 )
+
+//	@title			openstats API
+//	@version		1.0
+//	@license.name	GPL v3.0
+
+//	@host		localhost:3000
+//	@BasePath	/
+
+//	@securityDefinitions.apikey	SessionAuth
+//	@in							cookie
+//	@name						session_id
+//	@description				Cookie-based authentication, intended for user interactions on the website
+
+//	@securityDefinitions.apikey	ApiTokenAuth
+//	@in							header
+//	@name						Authorization
+//	@description				JWT authentication, intended for automated and developer use of the API
 
 const (
 	MaxDisplayNameLength = 64
@@ -35,20 +52,6 @@ var ArgonParameters = password.Parameters{
 	Parallelism: 1,
 	SaltLength:  16,
 	KeyLength:   32,
-}
-
-type RegisterDto struct {
-	// Email is optional, and just used for resetting the user's password
-	Email string `json:"email,omitempty"`
-
-	// DisplayName is optional, and is only used when displaying their profile on the website
-	DisplayName string `json:"displayName,omitempty"`
-
-	// Slug is a unique username for the user
-	Slug string `json:"slug"`
-
-	// Password is the user's login password
-	Password string `json:"password"`
 }
 
 func main() {
@@ -79,7 +82,7 @@ func main() {
 					fieldErrors[fieldError.Field] = append(fieldErrors[fieldError.Field], detail)
 				}
 
-				c.Status(400)
+				c.Status(fiber.StatusBadRequest)
 				return c.JSON(problems.Validation("", fieldErrors))
 			}
 
@@ -89,6 +92,11 @@ func main() {
 				return c.JSON(problems.Conflict(conflictErr.Field, conflictErr.Value, ""))
 			}
 
+			// TODO: request IDs to associate with errors
+			// TODO: setup default logger to output in a queryable format e.g JSON
+			log.Error(err)
+
+			// TODO: replace err with non-descriptive "An error occurred on the server" in production
 			return fiber.DefaultErrorHandler(c, err)
 		},
 	})

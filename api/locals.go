@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/gofiber/fiber/v2"
 )
