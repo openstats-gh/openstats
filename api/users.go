@@ -1,66 +1,66 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"errors"
+	"log"
 
 	"github.com/dresswithpockets/openstats/app/db/query"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/log"
 )
 
-func handleGetUsersBrief(c *fiber.Ctx) error {
-	userSlug := c.Params("slug")
-	if userSlug == "" {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
+type UnlockedAchievementInfo struct {
+	DeveloperSlug string
+	GameSlug      string
+	GameName      string
+	Slug          string
+	Name          string
+	Description   string
+}
 
-	recentUserAchievements, err := Queries.GetUserRecentAchievements(c.Context(), query.GetUserRecentAchievementsParams{
-		UserSlug: userSlug,
+type OtherUserUnlockedAchievementInfo struct {
+	DeveloperSlug   string
+	GameSlug        string
+	GameName        string
+	Slug            string
+	Name            string
+	Description     string
+	UserSlug        string
+	UserDisplayName string
+}
+
+type UserBriefBody struct {
+	Unlocks          []UnlockedAchievementInfo
+	OtherUserUnlocks []OtherUserUnlockedAchievementInfo
+}
+
+type UserBriefResponse struct {
+	Body UserBriefBody
+}
+
+type UserBriefRequest struct {
+	Slug string `path:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+}
+
+func HandleGetUsersBrief(ctx context.Context, input *UserBriefRequest) (*UserBriefResponse, error) {
+	recentUserAchievements, err := Queries.GetUserRecentAchievements(ctx, query.GetUserRecentAchievementsParams{
+		UserSlug: input.Slug,
 		Limit:    20,
 	})
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		// TODO: show error in the view
-		log.Error(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
+		log.Println(err)
+		return nil, err
 	}
 
-	recentOtherUserAchievements, err := Queries.GetOtherUserRecentAchievements(c.Context(), query.GetOtherUserRecentAchievementsParams{
-		ExcludedUserSlug: userSlug,
+	recentOtherUserAchievements, err := Queries.GetOtherUserRecentAchievements(ctx, query.GetOtherUserRecentAchievementsParams{
+		ExcludedUserSlug: input.Slug,
 		Limit:            20,
 	})
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		// TODO: show error in the view
-		log.Error(err)
-		return c.SendStatus(fiber.StatusInternalServerError)
-	}
-
-	type UnlockedAchievementInfo struct {
-		DeveloperSlug string `json:"developerSlug"`
-		GameSlug      string `json:"gameSlug"`
-		GameName      string `json:"gameName"`
-		Slug          string `json:"slug"`
-		Name          string `json:"name"`
-		Description   string `json:"description"`
-	}
-
-	type OtherUserUnlockedAchievementInfo struct {
-		DeveloperSlug   string `json:"developerSlug"`
-		GameSlug        string `json:"gameSlug"`
-		GameName        string `json:"gameName"`
-		Slug            string `json:"slug"`
-		Name            string `json:"name"`
-		Description     string `json:"description"`
-		UserSlug        string `json:"userSlug,omitempty"`
-		UserDisplayName string `json:"userDisplayName,omitempty"`
-	}
-
-	type Response struct {
-		Unlocks          []UnlockedAchievementInfo          `json:"unlocks"`
-		OtherUserUnlocks []OtherUserUnlockedAchievementInfo `json:"otherUserUnlocks"`
+		log.Println(err)
+		return nil, err
 	}
 
 	var unlocks []UnlockedAchievementInfo
@@ -69,7 +69,7 @@ func handleGetUsersBrief(c *fiber.Ctx) error {
 			DeveloperSlug: row.DeveloperSlug,
 			GameSlug:      row.GameSlug,
 			GameName:      row.GameName,
-			Slug:          userSlug,
+			Slug:          row.Slug,
 			Name:          row.Name,
 			Description:   row.Description,
 		})
@@ -86,7 +86,7 @@ func handleGetUsersBrief(c *fiber.Ctx) error {
 			DeveloperSlug:   row.DeveloperSlug,
 			GameSlug:        row.GameSlug,
 			GameName:        row.GameName,
-			Slug:            userSlug,
+			Slug:            row.Slug,
 			Name:            row.Name,
 			Description:     row.Description,
 			UserSlug:        row.UserSlug,
@@ -94,17 +94,10 @@ func handleGetUsersBrief(c *fiber.Ctx) error {
 		})
 	}
 
-	return c.JSON(Response{
-		Unlocks:          unlocks,
-		OtherUserUnlocks: otherUserUnlocks,
-	})
-}
-
-func SetupUsersRoutes(router fiber.Router) error {
-	usersRoutes := router.Group("/users")
-
-	usersRoutes.Use(UserAuthHandler)
-	usersRoutes.Get("/:slug/brief", handleGetUsersBrief)
-
-	return nil
+	return &UserBriefResponse{
+		Body: UserBriefBody{
+			Unlocks:          unlocks,
+			OtherUserUnlocks: otherUserUnlocks,
+		},
+	}, nil
 }

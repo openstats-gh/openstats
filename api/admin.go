@@ -27,14 +27,14 @@ func AddRootAdminUser(ctx context.Context) {
 	}
 }
 
-func IsAdmin(user *query.User) bool {
+func IsAdmin(user query.User) bool {
 	// TODO: add distinction between Admin and Root - Root should be able to add non-root Admin users, which can do
 	//       everything except add other Admins
-	return user != nil && user.Slug == RootUserSlug
+	return user.Slug == RootUserSlug
 }
 
-func IsRoot(user *query.User) bool {
-	return user != nil && user.Slug == RootUserSlug
+func IsRoot(user query.User) bool {
+	return user.Slug == RootUserSlug
 }
 
 type AdminPathGroup int

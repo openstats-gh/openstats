@@ -124,6 +124,23 @@ func (m RequireUserAuthMiddleware) Handler(ctx huma.Context, next func(huma.Cont
 	next(ctx)
 }
 
+type RequireAdminAuthMiddleware struct {
+	api huma.API
+}
+
+func NewRequireAdminAuthMiddleware(api huma.API) *RequireAdminAuthMiddleware {
+	return &RequireAdminAuthMiddleware{api: api}
+}
+
+func (m RequireAdminAuthMiddleware) Handler(ctx huma.Context, next func(huma.Context)) {
+	// TODO: include role in JWT?
+	if principal, ok := GetPrincipal(ctx.Context()); !ok || !IsAdmin(principal.User) {
+		_ = huma.WriteErr(m.api, ctx, http.StatusUnauthorized, "")
+	}
+
+	next(ctx)
+}
+
 var (
 	ErrInvalidEmailAddress = errors.New("invalid email address")
 	ErrInvalidDisplayName  = errors.New("invalid display name")
@@ -188,71 +205,12 @@ func CreateSessionToken(ctx context.Context, userLookupId uuid.UUID) (signedToke
 	return
 }
 
-//func UserAuthHandler(h http.Handler) http.Handler {
-//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		sessionCookie, cookieErr := r.Cookie(SessionCookieName)
-//		if cookieErr != nil {
-//			h.ServeHTTP(w, r)
-//			return
-//		}
-//
-//		// TODO: ParseWithClaims
-//		token, parseErr := jwt.Parse(sessionCookie.Value, func(token *jwt.Token) (any, error) {
-//			return SessionTokenSecret, nil
-//		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(SessionIssuer))
-//		if parseErr != nil {
-//			h.ServeHTTP(w, r)
-//			return
-//		}
-//
-//		claims, claimsOk := token.Claims.(jwt.MapClaims)
-//		if !claimsOk {
-//			h.ServeHTTP(w, r)
-//			return
-//		}
-//
-//		// the subject should be a user lookup ulid which never changes per-user
-//		subject, subjectErr := claims.GetSubject()
-//		if subjectErr != nil {
-//			h.ServeHTTP(w, r)
-//			return
-//		}
-//
-//		// TODO: FindUserByLookupId
-//		sessionUser, findErr := Queries.FindUserByLookupId(r.Context(), subject)
-//		if errors.Is(findErr, sql.ErrNoRows) {
-//			h.ServeHTTP(w, r)
-//			return
-//		}
-//
-//		if findErr != nil {
-//			// TODO: return as problem details? I really wish middleware could go through our error handler...
-//			h.ServeHTTP(w, r)
-//			return
-//		}
-//
-//		context.WithValue(r.Context(), "principal", sessionUser)
-//		h.ServeHTTP(w, r)
-//	})
-//}
-
-//func RequireUserAuthHandler(h http.Handler) http.Handler {
-//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		if r.Context().Value("principal") == nil {
-//			w.WriteHeader(http.StatusUnauthorized)
-//			return
-//		}
-//
-//		h.ServeHTTP(w, r)
-//	})
-//}
-
 type SignInRequest struct {
 	// Slug is a unique username for the user
-	Slug string `body:"slug" format:"slug" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+	Slug string `body:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
 
 	// Password is the user's login password
-	Password string `body:"password" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	Password string `body:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
 }
 
 type SignInResponse struct {
@@ -318,10 +276,10 @@ type SignUpRequest struct {
 	DisplayName string `body:"displayName" minLength:"1" maxLength:"64"`
 
 	// Slug is a unique username for the user
-	Slug string `body:"slug" format:"slug" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+	Slug string `body:"slug" format:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
 
 	// Password is the user's login password
-	Password string `body:"password" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	Password string `body:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
 }
 
 type SignUpResponse struct {
