@@ -2,19 +2,26 @@ create extension if not exists moddatetime;
 create extension if not exists pgcrypto;
 
 /*
-gen_ulid generates a ULID-based UUID: https://github.com/ulid/spec
-based on implementation here: https://web.archive.org/web/20250525070451/https://blog.daveallie.com/ulid-primary-keys/
+gen_uuid_v7 generates a Version 7 UUID
+based on implementation here: https://postgresql.verite.pro/blog/2024/07/15/uuid-v7-pure-sql.html
 
-N.B.
-    this implementation of gen_ulid is very slow compared to gen_random_uuid()
+TODO: replace with pgxn uuidv7 extension or upgrade to postgres 18
 
-TODO: i'd really like to replace this with pg-ulid: https://github.com/andrielfn/pg-ulid
-*/
-create or replace function gen_ulid() returns uuid
+ */
+create or replace function gen_uuid_v7() returns uuid
 as
 $$
-select (lpad(to_hex(floor(extract(epoch from clock_timestamp()) * 1000)::bigint), 12, '0') ||
-        encode(gen_random_bytes(10), 'hex'))::uuid;
+    -- Replace the first 48 bits of a uuidv4 with the current
+    -- number of milliseconds since 1970-01-01 UTC
+    -- and set the "ver" field to 7 by setting additional bits
+    select encode(
+       set_bit(
+           set_bit(
+               overlay(uuid_send(gen_random_uuid()) placing
+                   substring(int8send((extract(epoch from clock_timestamp())*1000)::bigint) from 3)
+                   from 1 for 6),
+               52, 1),
+           53, 1), 'hex')::uuid;
 $$ language sql;
 
 /*
@@ -32,7 +39,7 @@ returning *;
 */
 create table if not exists deleted_record
 (
-    id           uuid primary key     default gen_ulid(),
+    id           uuid primary key     default gen_uuid_v7(),
     deleted_at   timestamptz not null default now(),
     source_table text        not null,
     source_id    text        not null,
@@ -45,6 +52,7 @@ create table if not exists users
     id         serial primary key,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
+    lookup_id  uuid        not null default gen_uuid_v7() unique,
     slug       text        not null unique
 );
 create or replace trigger users_moddatetime
@@ -86,7 +94,7 @@ create table if not exists user_display_name
     display_name text        not null
 );
 
-create index user_display_name_created_at on user_display_name(created_at);
+create index if not exists user_display_name_created_at on user_display_name(created_at);
 
 create or replace view user_latest_display_name as
 select udn1.*
@@ -208,7 +216,7 @@ authentication, or authorization. Only the private key & JWT claims are used for
 */
 create table if not exists token
 (
-    id         uuid primary key default gen_ulid(),
+    id         uuid primary key default gen_uuid_v7(),
     issuer     text        not null,
     subject    text        not null,
     audience   text        not null,
@@ -229,7 +237,7 @@ create table if not exists token_disallow_list
 
 create table if not exists game_session
 (
-    id            uuid primary key     default gen_ulid(),
+    id            uuid primary key     default gen_uuid_v7(),
     created_at    timestamptz not null default now(),
     token_id      uuid references token,
     -- last time a pulse was received by the game
