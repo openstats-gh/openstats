@@ -1,10 +1,9 @@
 package main
 
 import (
+	"context"
 	"errors"
-
 	"github.com/dresswithpockets/openstats/app/db/query"
-	"github.com/gofiber/fiber/v2"
 )
 
 var (
@@ -16,8 +15,8 @@ type Local[T any] struct {
 	key string
 }
 
-func (local *Local[T]) Get(c *fiber.Ctx) (result T, ok bool) {
-	localValue := c.Locals(local.key)
+func (local *Local[T]) Get(ctx context.Context) (result T, ok bool) {
+	localValue := ctx.Value(local.key)
 	if localValue == nil {
 		ok = false
 		return
@@ -27,12 +26,12 @@ func (local *Local[T]) Get(c *fiber.Ctx) (result T, ok bool) {
 	return
 }
 
-func (local *Local[T]) Set(c *fiber.Ctx, value T) {
-	c.Locals(local.key, value)
+func (local *Local[T]) Set(ctx context.Context, value T) context.Context {
+	return context.WithValue(ctx, local.key, value)
 }
 
-func (local *Local[T]) Exists(c *fiber.Ctx) bool {
-	return c.Locals(local.key) != nil
+func (local *Local[T]) Exists(ctx context.Context) bool {
+	return ctx.Value(local.key) != nil
 }
 
 type CtxLocals struct {

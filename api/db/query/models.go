@@ -5,13 +5,16 @@
 package query
 
 import (
+	"time"
+
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Achievement struct {
 	ID                  int32
-	CreatedAt           pgtype.Timestamptz
-	UpdatedAt           pgtype.Timestamptz
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 	GameID              int32
 	Slug                string
 	Name                string
@@ -20,16 +23,16 @@ type Achievement struct {
 }
 
 type AchievementProgress struct {
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 	UserID        int32
 	AchievementID int32
 	Progress      int32
 }
 
 type DeletedRecord struct {
-	ID          pgtype.UUID
-	DeletedAt   pgtype.Timestamptz
+	ID          uuid.UUID
+	DeletedAt   time.Time
 	SourceTable string
 	SourceID    string
 	Data        []byte
@@ -37,83 +40,84 @@ type DeletedRecord struct {
 
 type Developer struct {
 	ID        int32
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
 	Slug      string
 }
 
 type DeveloperDisplayName struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 	DeveloperID int32
 	DisplayName string
 }
 
 type DeveloperMember struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 	UserID      int32
 	DeveloperID int32
 }
 
 type DeveloperSlugHistory struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 	DeveloperID int32
 	Slug        string
 }
 
 type Game struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	DeveloperID int32
 	Slug        string
 }
 
 type GameSession struct {
-	ID          pgtype.UUID
-	CreatedAt   pgtype.Timestamptz
+	ID          uuid.UUID
+	CreatedAt   time.Time
 	TokenID     pgtype.UUID
-	LastPulseAt pgtype.Timestamptz
+	LastPulseAt time.Time
 	GameID      int32
 	UserID      int32
 }
 
 type Token struct {
-	ID        pgtype.UUID
+	ID        uuid.UUID
 	Issuer    string
 	Subject   string
 	Audience  string
-	ExpiresAt pgtype.Timestamptz
-	NotBefore pgtype.Timestamptz
-	IssuedAt  pgtype.Timestamptz
+	ExpiresAt time.Time
+	NotBefore time.Time
+	IssuedAt  time.Time
 }
 
 type TokenDisallowList struct {
-	TokenID   pgtype.UUID
-	CreatedAt pgtype.Timestamptz
+	TokenID   uuid.UUID
+	CreatedAt time.Time
 }
 
 // openstats users. table is plural to avoid name collision with pg `user` keyword.
 type User struct {
 	ID        int32
-	CreatedAt pgtype.Timestamptz
-	UpdatedAt pgtype.Timestamptz
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	LookupID  uuid.UUID
 	Slug      string
 }
 
 type UserDisplayName struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 	UserID      int32
 	DisplayName string
 }
 
 type UserEmail struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	UserID      int32
 	Email       string
 	ConfirmedAt pgtype.Timestamptz
@@ -121,22 +125,22 @@ type UserEmail struct {
 
 type UserLatestDisplayName struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
 	UserID      int32
 	DisplayName string
 }
 
 type UserPassword struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 	UserID      int32
 	EncodedHash string
 }
 
 type UserSlugHistory struct {
 	ID        int32
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 	UserID    int32
 	Slug      string
 }

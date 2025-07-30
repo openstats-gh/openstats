@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"errors"
-
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/jackc/pgx/v5"
 )

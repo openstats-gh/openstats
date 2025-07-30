@@ -4,100 +4,124 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"github.com/danielgtaylor/huma/v2"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/password"
-	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"github.com/rotisserie/eris"
+	"log"
+	"net/http"
+	"time"
 )
 
-func AuthHandler(c *fiber.Ctx) error {
-	currentSession, err := SessionStore.Get(c)
-	if err != nil {
-		return err
+var ArgonParameters = password.Parameters{
+	Iterations:  2,
+	Memory:      19 * 1024,
+	Parallelism: 1,
+	SaltLength:  16,
+	KeyLength:   32,
+}
+
+const SessionCookieName = "sessionid"
+const SessionIssuer = "openstats"
+const SessionAudience = "openstats"
+const SessionDuration = time.Hour * 24 * 7
+const SessionJitter = time.Minute
+const PrincipalContextKey = "principal"
+
+var SessionTokenSecret = []byte("blahblahblah")
+
+type Principal struct {
+	User    query.User
+	TokenID uuid.UUID
+	Claims  jwt.RegisteredClaims
+}
+
+func GetPrincipal(ctx context.Context) (result *Principal, ok bool) {
+	result, ok = ctx.Value(PrincipalContextKey).(*Principal)
+	ok = ok && result != nil
+	return
+}
+
+func HasPrincipal(ctx context.Context) bool {
+	result, ok := ctx.Value(PrincipalContextKey).(*Principal)
+	return ok && result != nil
+}
+
+func UserAuthHandler(ctx huma.Context, next func(huma.Context)) {
+	sessionCookie, cookieErr := huma.ReadCookie(ctx, SessionCookieName)
+	if cookieErr != nil {
+		next(ctx)
+		return
 	}
 
-	sessionUserId, ok := currentSession.GetUserID()
-	if !ok {
-		return c.Next()
+	token, parseErr := jwt.ParseWithClaims(sessionCookie.Value, jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
+		return SessionTokenSecret, nil
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(SessionIssuer), jwt.WithAudience(SessionAudience))
+	if parseErr != nil {
+		next(ctx)
+		return
 	}
 
-	sessionUser, findErr := Queries.FindUser(c.Context(), sessionUserId)
+	// the subject should be a user lookup ulid which never changes per-user
+	subject, subjectErr := token.Claims.GetSubject()
+	if subjectErr != nil {
+		next(ctx)
+		return
+	}
+
+	subjectUuid, uuidErr := uuid.Parse(subject)
+	if uuidErr != nil {
+		log.Println(uuidErr)
+		next(ctx)
+		return
+	}
+
+	sessionUser, findErr := Queries.FindUserByLookupId(ctx.Context(), subjectUuid)
 	if errors.Is(findErr, sql.ErrNoRows) {
-		return c.Next()
+		next(ctx)
+		return
 	}
 
 	if findErr != nil {
-		return findErr
+		// TODO: huma.WriteErr() return as problem details? I really wish middleware could go through our error handler...
+		next(ctx)
+		return
 	}
 
-	Locals.User.Set(c, &sessionUser)
-	return c.Next()
+	tokenId, tokenIdErr := uuid.Parse(token.Claims.(jwt.RegisteredClaims).ID)
+	if tokenIdErr != nil {
+		// TODO: huma.WriteErr(), the JTI should always be a UUID...
+		next(ctx)
+		return
+	}
+
+	ctx = huma.WithValue(ctx, PrincipalContextKey, &Principal{
+		User:    sessionUser,
+		TokenID: tokenId,
+		Claims:  token.Claims.(jwt.RegisteredClaims),
+	})
+	next(ctx)
 }
 
-func RequireAuthHandler(c *fiber.Ctx) error {
-	if !Locals.User.Exists(c) {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	return c.Next()
+type RequireUserAuthMiddleware struct {
+	api huma.API
 }
 
-func RequireAdminAuthHandler(c *fiber.Ctx) error {
-	user, ok := Locals.User.Get(c)
-	if !ok || !IsAdmin(user) {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	return c.Next()
+func NewRequireUserAuthMiddleware(api huma.API) *RequireUserAuthMiddleware {
+	return &RequireUserAuthMiddleware{api: api}
 }
 
-func HandlePostSignIn(c *fiber.Ctx) error {
-	currentSession, err := SessionStore.Get(c)
-	if err != nil {
-		return err
+func (m RequireUserAuthMiddleware) Handler(ctx huma.Context, next func(huma.Context)) {
+	if !HasPrincipal(ctx.Context()) {
+		_ = huma.WriteErr(m.api, ctx, http.StatusUnauthorized, "")
+		return
 	}
 
-	type LoginDto struct {
-		// Slug is the user's unique username
-		Slug     string `json:"slug" validator:"required,slug"`
-		Password string `json:"password" validator:"required,password"`
-	}
-
-	var loginBody LoginDto
-	if bodyErr := c.BodyParser(&loginBody); bodyErr != nil {
-		// the body is either invalid json or otherwise unparsable with LoginDto
-		return c.SendStatus(fiber.StatusBadRequest)
-	}
-
-	if validateErr := Validate(loginBody); validateErr != nil {
-		return validateErr
-	}
-
-	result, findErr := Queries.FindUserBySlugWithPassword(c.Context(), loginBody.Slug)
-	if errors.Is(findErr, sql.ErrNoRows) {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if findErr != nil {
-		return findErr
-	}
-
-	verifyErr := password.VerifyPassword(loginBody.Password, result.EncodedHash)
-	if errors.Is(verifyErr, password.ErrHashMismatch) {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if verifyErr != nil {
-		return verifyErr
-	}
-
-	currentSession.SetUserID(result.ID)
-	if saveErr := currentSession.Save(); saveErr != nil {
-		return saveErr
-	}
-
-	return nil
+	next(ctx)
 }
 
 var (
@@ -132,41 +156,185 @@ func AddNewUser(ctx context.Context, displayName, email, slug, pass string) (new
 	return Actions.CreateUser(ctx, slug, encodedPassword, email, displayName)
 }
 
-func HandlePostSignUp(c *fiber.Ctx) error {
-	if Locals.User.Exists(c) {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	currentSession, err := SessionStore.Get(c)
+func CreateSessionToken(ctx context.Context, userLookupId uuid.UUID) (signedToken string, token query.Token, err error) {
+	nowTime := time.Now().UTC()
+	token, err = Queries.CreateToken(ctx, query.CreateTokenParams{
+		Issuer:    SessionIssuer,
+		Subject:   userLookupId.String(),
+		Audience:  SessionAudience,
+		ExpiresAt: nowTime.Add(SessionDuration),
+		NotBefore: nowTime.Add(-SessionJitter),
+		IssuedAt:  nowTime,
+	})
 	if err != nil {
-		return err
+		return
 	}
 
-	type RegisterDto struct {
-		// Email is optional, and just used for resetting the user's password
-		Email string `json:"email,omitempty" validator:"email"`
-
-		// DisplayName is optional, and is only used when displaying their profile on the website
-		DisplayName string `json:"displayName,omitempty" validator:"displayName"`
-
-		// Slug is a unique username for the user
-		Slug string `json:"slug" validator:"required,slug"`
-
-		// Password is the user's login password
-		Password string `json:"password" validator:"required,password"`
+	claims := jwt.RegisteredClaims{
+		Issuer:    token.Issuer,
+		Subject:   token.Subject,
+		Audience:  []string{token.Audience},
+		ExpiresAt: jwt.NewNumericDate(token.ExpiresAt),
+		NotBefore: jwt.NewNumericDate(token.NotBefore),
+		IssuedAt:  jwt.NewNumericDate(token.IssuedAt),
+		ID:        token.ID.String(),
 	}
 
-	var registerBody RegisterDto
-	if bodyErr := c.BodyParser(&registerBody); bodyErr != nil {
-		return c.SendStatus(fiber.StatusBadRequest)
+	signedToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(SessionTokenSecret)
+	if err != nil {
+		return
 	}
 
-	if validateErr := Validate(registerBody); validateErr != nil {
-		return validateErr
+	return
+}
+
+//func UserAuthHandler(h http.Handler) http.Handler {
+//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//		sessionCookie, cookieErr := r.Cookie(SessionCookieName)
+//		if cookieErr != nil {
+//			h.ServeHTTP(w, r)
+//			return
+//		}
+//
+//		// TODO: ParseWithClaims
+//		token, parseErr := jwt.Parse(sessionCookie.Value, func(token *jwt.Token) (any, error) {
+//			return SessionTokenSecret, nil
+//		}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithIssuer(SessionIssuer))
+//		if parseErr != nil {
+//			h.ServeHTTP(w, r)
+//			return
+//		}
+//
+//		claims, claimsOk := token.Claims.(jwt.MapClaims)
+//		if !claimsOk {
+//			h.ServeHTTP(w, r)
+//			return
+//		}
+//
+//		// the subject should be a user lookup ulid which never changes per-user
+//		subject, subjectErr := claims.GetSubject()
+//		if subjectErr != nil {
+//			h.ServeHTTP(w, r)
+//			return
+//		}
+//
+//		// TODO: FindUserByLookupId
+//		sessionUser, findErr := Queries.FindUserByLookupId(r.Context(), subject)
+//		if errors.Is(findErr, sql.ErrNoRows) {
+//			h.ServeHTTP(w, r)
+//			return
+//		}
+//
+//		if findErr != nil {
+//			// TODO: return as problem details? I really wish middleware could go through our error handler...
+//			h.ServeHTTP(w, r)
+//			return
+//		}
+//
+//		context.WithValue(r.Context(), "principal", sessionUser)
+//		h.ServeHTTP(w, r)
+//	})
+//}
+
+//func RequireUserAuthHandler(h http.Handler) http.Handler {
+//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+//		if r.Context().Value("principal") == nil {
+//			w.WriteHeader(http.StatusUnauthorized)
+//			return
+//		}
+//
+//		h.ServeHTTP(w, r)
+//	})
+//}
+
+type SignInRequest struct {
+	// Slug is a unique username for the user
+	Slug string `body:"slug" format:"slug" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+
+	// Password is the user's login password
+	Password string `body:"password" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+}
+
+type SignInResponse struct {
+	SetCookie http.Cookie `header:"Set-Cookie"`
+}
+
+func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInResponse, error) {
+	result, findErr := Queries.FindUserBySlugWithPassword(ctx, loginBody.Slug)
+	if errors.Is(findErr, sql.ErrNoRows) {
+		return nil, huma.Error404NotFound("slug or password don't match")
+	}
+
+	if findErr != nil {
+		return nil, findErr
+	}
+
+	verifyErr := password.VerifyPassword(loginBody.Password, result.EncodedHash)
+	if errors.Is(verifyErr, password.ErrHashMismatch) {
+		return nil, huma.Error404NotFound("slug or password don't match")
+	}
+
+	if verifyErr != nil {
+		return nil, verifyErr
+	}
+
+	signedJwt, token, createErr := CreateSessionToken(ctx, result.LookupID)
+	if createErr != nil {
+		return nil, createErr
+	}
+
+	return &SignInResponse{
+		SetCookie: http.Cookie{
+			Name:    SessionCookieName,
+			Value:   signedJwt,
+			Expires: token.ExpiresAt,
+			Secure:  true,
+		},
+	}, nil
+}
+
+type ConflictSignUpSlug struct {
+	Location string
+	Slug     string
+}
+
+func (c ConflictSignUpSlug) Error() string {
+	return fmt.Sprintf("user slug '%s' @ '%s' is already in use", c.Slug, c.Location)
+}
+
+func (c ConflictSignUpSlug) ErrorDetail() *huma.ErrorDetail {
+	return &huma.ErrorDetail{
+		Message:  "the user slug is already in use",
+		Location: c.Location,
+		Value:    c.Slug,
+	}
+}
+
+type SignUpRequest struct {
+	// Email is optional, and just used for resetting the user's password
+	Email string `body:"email" format:"email"`
+
+	// DisplayName is optional, and is only used when displaying their profile on the website
+	DisplayName string `body:"displayName" minLength:"1" maxLength:"64"`
+
+	// Slug is a unique username for the user
+	Slug string `body:"slug" format:"slug" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+
+	// Password is the user's login password
+	Password string `body:"password" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+}
+
+type SignUpResponse struct {
+	SetCookie http.Cookie `header:"Set-Cookie"`
+}
+
+func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUpResponse, error) {
+	if HasPrincipal(ctx) {
+		return nil, huma.Error401Unauthorized("already signed in")
 	}
 
 	newUser, newUserError := AddNewUser(
-		c.Context(),
+		ctx,
 		registerBody.DisplayName,
 		registerBody.Email,
 		registerBody.Slug,
@@ -174,72 +342,82 @@ func HandlePostSignUp(c *fiber.Ctx) error {
 	)
 	if newUserError != nil {
 		if errors.Is(newUserError, db.ErrSlugAlreadyInUse) {
-			return Conflict("slug", registerBody.Slug)
+			return nil, &ConflictSignUpSlug{
+				Location: "body.slug",
+				Slug:     registerBody.Slug,
+			}
 		}
 
 		if ErrorIsAny(newUserError, ErrInvalidEmailAddress, ErrInvalidDisplayName, ErrInvalidSlug, ErrInvalidPassword) {
-			return eris.Wrap(newUserError, "registerBody was Validated, and yet AddUser returned a validation error")
+			return nil, eris.Wrap(newUserError, "registerBody was Validated, and yet AddUser returned a validation error")
 		}
 
-		return newUserError
+		return nil, newUserError
 	}
 
-	currentSession.SetUserID(newUser.ID)
-	if saveErr := currentSession.Save(); saveErr != nil {
-		return saveErr
+	signedJwt, token, createErr := CreateSessionToken(ctx, newUser.LookupID)
+	if createErr != nil {
+		return nil, createErr
 	}
 
-	return nil
+	return &SignUpResponse{
+		SetCookie: http.Cookie{
+			Name:    SessionCookieName,
+			Value:   signedJwt,
+			Expires: token.ExpiresAt,
+			Secure:  true,
+		},
+	}, nil
 }
 
-func HandlePostSignOut(c *fiber.Ctx) error {
-	if !Locals.User.Exists(c) {
-		// we're already logged out, just go back home
-		return nil
-	}
-
-	currentSession, err := SessionStore.Get(c)
-	if err != nil {
-		return err
-	}
-
-	destroyErr := currentSession.Destroy()
-	if destroyErr != nil {
-		return destroyErr
-	}
-
-	return nil
+type SignOutResponse struct {
+	SetCookie http.Cookie `header:"Set-Cookie"`
 }
 
-func HandleGetSession(c *fiber.Ctx) error {
-	localUser, userExists := Locals.User.Get(c)
-	if !userExists {
-		return c.SendStatus(fiber.StatusUnauthorized)
+func HandlePostSignOut(ctx context.Context, input *struct{}) (*SignOutResponse, error) {
+	if principal, ok := GetPrincipal(ctx); ok {
+		err := Queries.DisallowToken(ctx, principal.TokenID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	userDisplayName, err := Queries.GetUserLatestDisplayName(c.Context(), localUser.ID)
+	// no matter what, always expire the session cookie
+	return &SignOutResponse{
+		SetCookie: http.Cookie{
+			Name:    SessionCookieName,
+			Expires: time.Now(),
+			Secure:  true,
+		},
+	}, nil
+}
+
+type SessionResponseBody struct {
+	Slug        string `json:"slug"`
+	DisplayName string `json:"displayName"`
+}
+
+type SessionResponse struct {
+	Body SessionResponseBody
+}
+
+func HandleGetSession(ctx context.Context, input *struct{}) (*SessionResponse, error) {
+	principal, hasPrincipal := GetPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("no session")
+	}
+
+	userDisplayName, err := Queries.GetUserLatestDisplayName(ctx, principal.User.ID)
 	if errors.Is(err, sql.ErrNoRows) {
 		userDisplayName = query.UserDisplayName{DisplayName: ""}
 	} else if err != nil {
-		return err
+		return nil, err
 	}
 
-	// otherwise, we can just render the login form
-	return c.JSON(fiber.Map{
-		"slug":        localUser.Slug,
-		"displayName": userDisplayName.DisplayName,
-	})
-}
-
-func SetupAuthRoutes(router fiber.Router) error {
-	rootRoute := router.Group("/auth")
-
-	rootRoute.Use(AuthHandler)
-	rootRoute.Get("/session", HandleGetSession)
-	rootRoute.Post("/sign-in", HandlePostSignIn)
-	rootRoute.Post("/sign-up", HandlePostSignUp)
-	rootRoute.Use("/sign-out", RequireAuthHandler)
-	rootRoute.Post("/sign-out", HandlePostSignOut)
-
-	return nil
+	return &SessionResponse{
+		Body: SessionResponseBody{
+			Slug:        principal.User.Slug,
+			DisplayName: userDisplayName.DisplayName,
+		},
+	}, nil
 }

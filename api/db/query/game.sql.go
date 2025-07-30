@@ -7,8 +7,7 @@ package query
 
 import (
 	"context"
-
-	"github.com/jackc/pgx/v5/pgtype"
+	"time"
 )
 
 const allGames = `-- name: AllGames :many
@@ -19,8 +18,8 @@ from game
 
 type AllGamesRow struct {
 	ID            int32
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 	DeveloperID   int32
 	Slug          string
 	DeveloperSlug string

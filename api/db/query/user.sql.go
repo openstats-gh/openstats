@@ -7,12 +7,14 @@ package query
 
 import (
 	"context"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addUser = `-- name: AddUser :one
-insert into users (slug) values ($1) returning id, created_at, updated_at, slug
+insert into users (slug) values ($1) returning id, created_at, updated_at, lookup_id, slug
 `
 
 func (q *Queries) AddUser(ctx context.Context, slug string) (User, error) {
@@ -22,6 +24,7 @@ func (q *Queries) AddUser(ctx context.Context, slug string) (User, error) {
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LookupID,
 		&i.Slug,
 	)
 	return i, err
@@ -84,15 +87,16 @@ func (q *Queries) AddUserSlugHistory(ctx context.Context, arg AddUserSlugHistory
 }
 
 const allUsersWithDisplayNames = `-- name: AllUsersWithDisplayNames :many
-select u.id, u.created_at, u.updated_at, u.slug, uldn.display_name
+select u.id, u.created_at, u.updated_at, u.lookup_id, u.slug, uldn.display_name
 from users u
     left outer join user_latest_display_name uldn on u.id = uldn.user_id
 `
 
 type AllUsersWithDisplayNamesRow struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	LookupID    uuid.UUID
 	Slug        string
 	DisplayName pgtype.Text
 }
@@ -110,6 +114,7 @@ func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithD
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.LookupID,
 			&i.Slug,
 			&i.DisplayName,
 		); err != nil {
@@ -124,7 +129,7 @@ func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithD
 }
 
 const findUser = `-- name: FindUser :one
-select id, created_at, updated_at, slug from users where id = $1 limit 1
+select id, created_at, updated_at, lookup_id, slug from users where id = $1 limit 1
 `
 
 func (q *Queries) FindUser(ctx context.Context, id int32) (User, error) {
@@ -134,13 +139,34 @@ func (q *Queries) FindUser(ctx context.Context, id int32) (User, error) {
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LookupID,
+		&i.Slug,
+	)
+	return i, err
+}
+
+const findUserByLookupId = `-- name: FindUserByLookupId :one
+select id, created_at, updated_at, lookup_id, slug
+from users
+where lookup_id = $1
+limit 1
+`
+
+func (q *Queries) FindUserByLookupId(ctx context.Context, lookupID uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, findUserByLookupId, lookupID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LookupID,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const findUserBySlug = `-- name: FindUserBySlug :one
-select id, created_at, updated_at, slug
+select id, created_at, updated_at, lookup_id, slug
 from users
 where slug = $1
 limit 1
@@ -153,13 +179,14 @@ func (q *Queries) FindUserBySlug(ctx context.Context, slug string) (User, error)
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LookupID,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const findUserBySlugWithPassword = `-- name: FindUserBySlugWithPassword :one
-select u.id, u.created_at, u.updated_at, u.slug, up.encoded_hash
+select u.id, u.created_at, u.updated_at, u.lookup_id, u.slug, up.encoded_hash
 from users u
      join user_password up on u.id = up.user_id
 where u.slug = $1
@@ -168,8 +195,9 @@ limit 1
 
 type FindUserBySlugWithPasswordRow struct {
 	ID          int32
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	LookupID    uuid.UUID
 	Slug        string
 	EncodedHash string
 }
@@ -181,6 +209,7 @@ func (q *Queries) FindUserBySlugWithPassword(ctx context.Context, slug string) (
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.LookupID,
 		&i.Slug,
 		&i.EncodedHash,
 	)
@@ -255,8 +284,8 @@ where dm.user_id = $1
 
 type GetUserDevelopersRow struct {
 	Slug      string
-	CreatedAt pgtype.Timestamptz
-	JoinedAt  pgtype.Timestamptz
+	CreatedAt time.Time
+	JoinedAt  time.Time
 }
 
 func (q *Queries) GetUserDevelopers(ctx context.Context, userID int32) ([]GetUserDevelopersRow, error) {

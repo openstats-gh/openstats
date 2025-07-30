@@ -103,7 +103,7 @@ func handleGetUsersBrief(c *fiber.Ctx) error {
 func SetupUsersRoutes(router fiber.Router) error {
 	usersRoutes := router.Group("/users")
 
-	usersRoutes.Use(AuthHandler)
+	usersRoutes.Use(UserAuthHandler)
 	usersRoutes.Get("/:slug/brief", handleGetUsersBrief)
 
 	return nil

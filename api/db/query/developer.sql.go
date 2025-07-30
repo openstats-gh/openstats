@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -62,7 +63,7 @@ select game.slug, game.created_at from game where developer_id = $1
 
 type GetDeveloperGamesRow struct {
 	Slug      string
-	CreatedAt pgtype.Timestamptz
+	CreatedAt time.Time
 }
 
 func (q *Queries) GetDeveloperGames(ctx context.Context, developerID int32) ([]GetDeveloperGamesRow, error) {
@@ -96,7 +97,7 @@ where dm.developer_id = $1
 type GetDeveloperMembersRow struct {
 	Slug        string
 	DisplayName pgtype.Text
-	JoinedAt    pgtype.Timestamptz
+	JoinedAt    time.Time
 }
 
 func (q *Queries) GetDeveloperMembers(ctx context.Context, developerID int32) ([]GetDeveloperMembersRow, error) {

@@ -468,8 +468,8 @@ func viewAdminGameAchievementsDelete(ctx *fiber.Ctx) error {
 
 func SetupAdminViews(router fiber.Router) error {
 	adminGroup := router.Group("/admin")
-	adminGroup.Use(AuthHandler)
-	adminGroup.Use(RequireAdminAuthHandler)
+	adminGroup.Use(UserAuthHandler)
+	//adminGroup.Use(RequireAdminAuthHandler)
 
 	adminGroup.Get("/", viewAdminHomeGet)
 

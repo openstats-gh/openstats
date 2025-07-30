@@ -10,6 +10,17 @@ import (
 	"github.com/rotisserie/eris"
 )
 
+const (
+	MaxDisplayNameLength = 64
+	MinDisplayNameLength = 1
+	MaxSlugNameLength    = 64
+	MinSlugNameLength    = 2
+	MaxPasswordLength    = 32
+	MinPasswordLength    = 10
+)
+
+var ValidSlugSpecialCharacters = []rune("!@#$%^&*")
+
 var goValidator = validator.New(validator.WithRequiredStructEnabled())
 
 type ConflictError struct {

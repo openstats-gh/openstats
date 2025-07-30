@@ -7,6 +7,12 @@ from users
 where slug = $1
 limit 1;
 
+-- name: FindUserByLookupId :one
+select *
+from users
+where lookup_id = $1
+limit 1;
+
 -- name: FindUserBySlugWithPassword :one
 select u.*, up.encoded_hash
 from users u
