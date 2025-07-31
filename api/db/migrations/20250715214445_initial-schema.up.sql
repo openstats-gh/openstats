@@ -86,6 +86,13 @@ create or replace trigger user_email_moddatetime
     for each row
 execute function moddatetime(updated_at);
 
+create or replace view user_latest_email as
+select ue1.*
+from user_email ue1
+    left outer join user_email ue2 on ue1.user_id = ue2.user_id and
+                                      (ue1.created_at < ue2.created_at or
+                                       (ue1.created_at = ue2.created_at and ue1.id < ue2.id));
+
 create table if not exists user_display_name
 (
     id           serial primary key,
@@ -99,7 +106,7 @@ create index if not exists user_display_name_created_at on user_display_name(cre
 create or replace view user_latest_display_name as
 select udn1.*
 from user_display_name udn1
-     left outer join user_display_name udn2 on udn1.id = udn2.user_id and
+     left outer join user_display_name udn2 on udn1.user_id = udn2.user_id and
                                                (udn1.created_at < udn2.created_at or
                                                 (udn1.created_at = udn2.created_at and udn1.id < udn2.id));
 

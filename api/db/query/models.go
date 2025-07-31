@@ -130,6 +130,15 @@ type UserLatestDisplayName struct {
 	DisplayName string
 }
 
+type UserLatestEmail struct {
+	ID          int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	UserID      int32
+	Email       string
+	ConfirmedAt pgtype.Timestamptz
+}
+
 type UserPassword struct {
 	ID          int32
 	CreatedAt   time.Time

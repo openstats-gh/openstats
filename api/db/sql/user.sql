@@ -87,3 +87,14 @@ where u.slug != @excluded_user_slug
   and ap.progress >= a.progress_requirement
 order by ap.created_at desc
 limit $1;
+
+-- Batch Inserts:
+
+-- name: FindUserUUIDsBySlugs :many
+select lookup_id from users where slug = any(sqlc.slice(slugs));
+
+-- name: AddUsers :copyfrom
+insert into users (slug) values ($1);
+
+-- name: AddUserSlugHistories :copyfrom
+insert into user_slug_history (user_id, slug) values ($1, $2);

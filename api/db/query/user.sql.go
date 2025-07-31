@@ -72,6 +72,11 @@ func (q *Queries) AddUserPassword(ctx context.Context, arg AddUserPasswordParams
 	return err
 }
 
+type AddUserSlugHistoriesParams struct {
+	UserID int32
+	Slug   string
+}
+
 const addUserSlugHistory = `-- name: AddUserSlugHistory :exec
 insert into user_slug_history(user_id, slug) values ($1, $2)
 `
@@ -214,6 +219,32 @@ func (q *Queries) FindUserBySlugWithPassword(ctx context.Context, slug string) (
 		&i.EncodedHash,
 	)
 	return i, err
+}
+
+const findUserUUIDsBySlugs = `-- name: FindUserUUIDsBySlugs :many
+
+select lookup_id from users where slug = any($1)
+`
+
+// Batch Inserts:
+func (q *Queries) FindUserUUIDsBySlugs(ctx context.Context, slugs []string) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, findUserUUIDsBySlugs, slugs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var lookup_id uuid.UUID
+		if err := rows.Scan(&lookup_id); err != nil {
+			return nil, err
+		}
+		items = append(items, lookup_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements :many

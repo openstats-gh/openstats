@@ -14,6 +14,7 @@ drop trigger if exists user_password_moddatetime on user_password;
 drop table if exists user_password;
 drop view if exists user_latest_display_name;
 drop table if exists user_display_name;
+drop view if exists user_latest_email;
 drop trigger if exists user_email_moddatetime on user_email;
 drop table if exists user_email;
 drop table if exists user_slug_history;

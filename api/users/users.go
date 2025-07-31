@@ -9,6 +9,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/validation"
+	"github.com/jackc/pgx/v5"
 	"github.com/rotisserie/eris"
 	"log"
 	"net/http"
@@ -33,6 +34,29 @@ type OtherUserUnlockedAchievementInfo struct {
 	Description     string
 	UserSlug        string
 	UserDisplayName string
+}
+
+// User resource returned by users/ endpoints
+type User struct {
+	LookupID    validation.LookupID `json:"lookupId"`
+	Slug        string              `json:"slug"`
+	DisplayName string              `json:"displayName,omitempty"`
+	Email       string              `json:"email,omitempty"`
+	CreatedAt   time.Time           `json:"createdAt"`
+}
+
+type CreateUser struct {
+	Slug        string `json:"slug"`
+	Password    string `json:"password"`
+	DisplayName string `json:"displayName,omitempty"`
+	Email       string `json:"email,omitempty"`
+}
+
+type MutateUser struct {
+	Slug        string `json:"slug,omitempty"`
+	DisplayName string `json:"displayName,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Password    string `json:"password,omitempty"`
 }
 
 type UserBriefBody struct {
@@ -109,20 +133,15 @@ func HandleGetUsersBrief(ctx context.Context, input *UserBriefRequest) (*UserBri
 }
 
 type ListUsersRequest struct {
-	Slug  validation.Optional[string]              `query:"slug"`
-	Limit validation.Optional[int]                 `query:"limit" minimum:"10" maximum:"50" doc:"default = 10"`
-	After validation.Optional[validation.LookupID] `query:"after" format:"uuid"`
-}
-
-type ListUsersItem struct {
-	LookupID    validation.LookupID `json:"lookupId"`
-	Slug        string              `json:"slug"`
-	DisplayName string              `json:"displayName"`
-	CreatedAt   time.Time           `json:"createdAt"`
+	// TODO: oneOf Slug and SlugContains
+	Slug         validation.Optional[string]              `query:"slug"`
+	SlugContains validation.Optional[string]              `query:"slugContains"`
+	Limit        validation.Optional[int]                 `query:"limit" minimum:"10" maximum:"50" doc:"default = 10"`
+	After        validation.Optional[validation.LookupID] `query:"after" format:"uuid"`
 }
 
 type ListUsersBody struct {
-	Items []ListUsersItem `json:"items"`
+	Users []User `json:"users"`
 }
 
 type ListUsersResponse struct {
@@ -130,14 +149,19 @@ type ListUsersResponse struct {
 }
 
 func HandleListUsers(ctx context.Context, input *ListUsersRequest) (*ListUsersResponse, error) {
+	// TODO: only include displayName and email upon request
+	// TODO: limit email access to Admin or authenticated user matching user in query
 	builder := db.DB.Builder().
-		Select("u.lookup_id", "u.slug", "uldn.display_name", "u.created_at").
+		Select("u.lookup_id", "u.slug", "coalesce(uldn.display_name, '')", "coalesce(ule.email, '')", "u.created_at").
 		From("users u").
 		JoinClause("left outer join user_latest_display_name uldn on u.id = uldn.user_id").
+		JoinClause("left outer join user_latest_email ule on u.id = ule.user_id").
 		OrderBy("u.lookup_id desc")
 
 	if input.Slug.HasValue {
-		builder = builder.Where("u.slug like ?", "%"+input.Slug.Value+"%")
+		builder = builder.Where("u.slug = ?", input.Slug.Value)
+	} else if input.SlugContains.HasValue {
+		builder = builder.Where("u.slug like ?", "%"+input.SlugContains.Value+"%")
 	}
 
 	if input.After.HasValue {
@@ -154,19 +178,113 @@ func HandleListUsers(ctx context.Context, input *ListUsersRequest) (*ListUsersRe
 
 	defer rows.Close()
 
-	var items []ListUsersItem
+	var users []User
 	for rows.Next() {
-		var item ListUsersItem
-		if scanErr := rows.Scan(&item.LookupID, &item.Slug, &item.DisplayName, &item.CreatedAt); scanErr != nil {
+		var item User
+		if scanErr := rows.Scan(
+			&item.LookupID,
+			&item.Slug,
+			&item.DisplayName,
+			&item.Email,
+			&item.CreatedAt,
+		); scanErr != nil {
 			return nil, eris.Wrap(scanErr, "")
 		}
 
-		items = append(items, item)
+		users = append(users, item)
 	}
 
 	return &ListUsersResponse{
 		Body: ListUsersBody{
-			Items: items,
+			Users: users,
+		},
+	}, nil
+}
+
+type ReadUserRequest struct {
+	Slug string `path:"slug"`
+}
+
+type ReadUserResponse struct {
+	Body struct {
+		User User `json:"user"`
+	}
+}
+
+func HandleReadUser(ctx context.Context, input *ReadUserRequest) (*ReadUserResponse, error) {
+	// TODO: only include displayName and email upon request
+	// TODO: limit email access to Admin or authenticated user matching user in query
+	builder := db.DB.Builder().
+		Select("u.lookup_id", "u.slug", "coalesce(uldn.display_name, '')", "coalesce(ule.email, '')", "u.created_at").
+		From("users u").
+		JoinClause("left outer join user_latest_display_name uldn on u.id = uldn.user_id").
+		JoinClause("left outer join user_latest_email ule on u.id = ule.user_id").
+		Where("u.slug = ?", input.Slug)
+
+	var result ReadUserResponse
+	scanErr := db.DB.ScanRow(
+		ctx,
+		builder,
+		&result.Body.User.LookupID,
+		&result.Body.User.Slug,
+		&result.Body.User.DisplayName,
+		&result.Body.User.Email,
+		&result.Body.User.CreatedAt,
+	)
+	if errors.Is(scanErr, pgx.ErrNoRows) {
+		return nil, huma.Error404NotFound("no user with matching slug")
+	}
+	if scanErr != nil {
+		return nil, eris.Wrap(scanErr, "")
+	}
+
+	return &result, nil
+}
+
+type PutUserRequest struct {
+	User CreateUser `json:"user"`
+}
+
+type PutUserResponseBody struct {
+	User User `json:"user"`
+}
+
+type PutUserResponse struct {
+	Status int
+	Body   PutUserResponseBody
+}
+
+func HandlePutUser(ctx context.Context, input *PutUserRequest) (*PutUserResponse, error) {
+	principal, hasPrincipal := auth.GetPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("a session is required")
+	}
+
+	// TODO: let Root user flag users as Admin
+	if !auth.IsAdmin(principal.User) {
+		return nil, huma.Error401Unauthorized("you are not authorized to create this user")
+	}
+
+	newUser, err := auth.AddNewUser(ctx, input.User.DisplayName, input.User.Email, input.User.Slug, input.User.Password)
+	if errors.Is(err, db.ErrSlugAlreadyInUse) {
+		// TODO: better conflict mechanism (take advantage of problem details, huma.ErrorDetailer?)
+		return nil, huma.Error409Conflict("slug is already in use")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &PutUserResponse{
+		Status: http.StatusCreated,
+		Body: PutUserResponseBody{
+			User: User{
+				LookupID:    validation.LookupID(newUser.LookupID),
+				Slug:        newUser.Slug,
+				DisplayName: input.User.DisplayName,
+				Email:       input.User.Email,
+				CreatedAt:   newUser.CreatedAt,
+			},
 		},
 	}, nil
 }
@@ -201,44 +319,31 @@ func RegisterRoutes(api huma.API) {
 	}, HandleListUsers)
 
 	huma.Register(userApi, huma.Operation{
-		OperationID: "create-users",
-		Method:      http.MethodPost,
-		Path:        "/",
-		Summary:     "Create new users",
-		Description: "Create 1 or more users. Requires an admin session.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserHandler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
-
-	huma.Register(userApi, huma.Operation{
 		OperationID: "read-user",
 		Method:      http.MethodGet,
 		Path:        "/{slug}",
-		Summary:     "Read user",
+		Summary:     "Read a user",
 		Description: "Get some details for a particular user",
-	}, HandlerTODO)
+	}, HandleReadUser)
 
 	huma.Register(userApi, huma.Operation{
-		OperationID: "upsert-user",
+		OperationID: "put-user",
 		Method:      http.MethodPut,
 		Path:        "/{slug}",
-		Summary:     "Create or update user",
-		Description: "Create or update a user at the slug specified. This is an upsert operation - it will try to create the user if it doesn't already exist, and will otherwise update an existing user.",
+		Summary:     "Create a user",
+		Description: "Create a user at the slug specified.",
 		Security:    []map[string][]string{{"Cookie": {}}},
 		Middlewares: huma.Middlewares{requireUserHandler},
 		Errors: []int{
 			http.StatusUnauthorized,
 		},
-	}, HandlerTODO)
+	}, HandlePutUser)
 
 	huma.Register(userApi, huma.Operation{
 		OperationID: "patch-user",
 		Method:      http.MethodPatch,
 		Path:        "/{slug}",
-		Summary:     "Update user",
+		Summary:     "Update a user",
 		Description: "Update an existing user at the slug.",
 		Security:    []map[string][]string{{"Cookie": {}}},
 		Middlewares: huma.Middlewares{requireUserHandler},
