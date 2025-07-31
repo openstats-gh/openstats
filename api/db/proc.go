@@ -3,26 +3,69 @@ package db
 import (
 	"context"
 	"errors"
+	"github.com/Masterminds/squirrel"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrSlugAlreadyInUse = errors.New("slug already in use")
 
 type Actions struct {
+	pool    *pgxpool.Pool
 	queries *query.Queries
-	conn    *pgx.Conn
 }
 
-func NewActions(conn *pgx.Conn, queries *query.Queries) *Actions {
+func NewActions(pool *pgxpool.Pool, queries *query.Queries) *Actions {
 	return &Actions{
 		queries: queries,
-		conn:    conn,
+		pool:    pool,
 	}
 }
 
+func (a *Actions) Builder() squirrel.StatementBuilderType {
+	return squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+}
+
+func (a *Actions) Exec(ctx context.Context, sqlizer squirrel.Sqlizer) (pgconn.CommandTag, error) {
+	sql, args, sqlErr := sqlizer.ToSql()
+	if sqlErr != nil {
+		return pgconn.CommandTag{}, sqlErr
+	}
+
+	return a.pool.Exec(ctx, sql, args...)
+}
+
+func (a *Actions) Query(ctx context.Context, sqlizer squirrel.Sqlizer) (pgx.Rows, error) {
+	sql, args, sqlErr := sqlizer.ToSql()
+	if sqlErr != nil {
+		return nil, sqlErr
+	}
+
+	return a.pool.Query(ctx, sql, args...)
+}
+
+func (a *Actions) QueryRow(ctx context.Context, sqlizer squirrel.Sqlizer) (pgx.Row, error) {
+	sql, args, sqlErr := sqlizer.ToSql()
+	if sqlErr != nil {
+		return nil, sqlErr
+	}
+
+	return a.pool.QueryRow(ctx, sql, args...), nil
+}
+
+func (a *Actions) ScanRow(ctx context.Context, sqlizer squirrel.Sqlizer, dest ...any) error {
+	sql, args, sqlErr := sqlizer.ToSql()
+	if sqlErr != nil {
+		return sqlErr
+	}
+
+	return a.pool.QueryRow(ctx, sql, args...).Scan(dest...)
+}
+
 func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, email, displayName string) (*query.User, error) {
-	tx, txErr := a.conn.BeginTx(ctx, pgx.TxOptions{})
+	tx, txErr := a.pool.BeginTx(ctx, pgx.TxOptions{})
 	if txErr != nil {
 		return nil, txErr
 	}

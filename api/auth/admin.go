@@ -1,10 +1,9 @@
-package main
+package auth
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/gofiber/fiber/v2"
@@ -79,7 +78,7 @@ func viewAdminHomeGet(ctx *fiber.Ctx) error {
 }
 
 func viewAdminUsersList(ctx *fiber.Ctx) error {
-	result, queryErr := Queries.AllUsersWithDisplayNames(ctx.Context())
+	result, queryErr := db.Queries.AllUsersWithDisplayNames(ctx.Context())
 	if queryErr != nil && !errors.Is(queryErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
@@ -97,7 +96,7 @@ func viewAdminUsersRead(ctx *fiber.Ctx) error {
 		return ctx.Redirect("/admin/users")
 	}
 
-	user, userErr := Queries.FindUserBySlug(ctx.Context(), slug)
+	user, userErr := db.Queries.FindUserBySlug(ctx.Context(), slug)
 
 	foundUser := true
 	if errors.Is(userErr, sql.ErrNoRows) {
@@ -107,17 +106,17 @@ func viewAdminUsersRead(ctx *fiber.Ctx) error {
 		// TODO: handle error
 	}
 
-	displayNames, displayNamesErr := Queries.GetUserDisplayNames(ctx.Context(), user.ID)
+	displayNames, displayNamesErr := db.Queries.GetUserDisplayNames(ctx.Context(), user.ID)
 	if displayNamesErr != nil && !errors.Is(displayNamesErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
 
-	emails, emailsErr := Queries.GetUserEmails(ctx.Context(), user.ID)
+	emails, emailsErr := db.Queries.GetUserEmails(ctx.Context(), user.ID)
 	if emailsErr != nil && !errors.Is(emailsErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
 
-	developers, developersErr := Queries.GetUserDevelopers(ctx.Context(), user.ID)
+	developers, developersErr := db.Queries.GetUserDevelopers(ctx.Context(), user.ID)
 	if developersErr != nil && !errors.Is(developersErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
@@ -214,7 +213,7 @@ func viewAdminUsersDelete(ctx *fiber.Ctx) error {
 }
 
 func viewAdminDevelopersList(ctx *fiber.Ctx) error {
-	result, err := Queries.AllDevelopers(ctx.Context())
+	result, err := db.Queries.AllDevelopers(ctx.Context())
 	if err != nil {
 		// TODO: handle error
 	}
@@ -232,7 +231,7 @@ func viewAdminDevelopersRead(ctx *fiber.Ctx) error {
 		return ctx.Redirect("/admin/developers")
 	}
 
-	developer, developerErr := Queries.FindDeveloperBySlug(ctx.Context(), slug)
+	developer, developerErr := db.Queries.FindDeveloperBySlug(ctx.Context(), slug)
 
 	foundDeveloper := true
 	if errors.Is(developerErr, sql.ErrNoRows) {
@@ -242,12 +241,12 @@ func viewAdminDevelopersRead(ctx *fiber.Ctx) error {
 		// TODO: handle error
 	}
 
-	members, membersErr := Queries.GetDeveloperMembers(ctx.Context(), developer.ID)
+	members, membersErr := db.Queries.GetDeveloperMembers(ctx.Context(), developer.ID)
 	if membersErr != nil && !errors.Is(membersErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
 
-	games, gamesErr := Queries.GetDeveloperGames(ctx.Context(), developer.ID)
+	games, gamesErr := db.Queries.GetDeveloperGames(ctx.Context(), developer.ID)
 	if gamesErr != nil && !errors.Is(gamesErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
@@ -280,7 +279,7 @@ func viewAdminDevelopersDelete(ctx *fiber.Ctx) error {
 }
 
 func viewAdminGamesList(ctx *fiber.Ctx) error {
-	games, err := Queries.AllGames(ctx.Context())
+	games, err := db.Queries.AllGames(ctx.Context())
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		// TODO: handle error
 	}
@@ -299,7 +298,7 @@ func viewAdminGamesRead(ctx *fiber.Ctx) error {
 		return ctx.Redirect("/admin/developers/@/games")
 	}
 
-	game, gameErr := Queries.FindGameBySlug(ctx.Context(), query.FindGameBySlugParams{
+	game, gameErr := db.Queries.FindGameBySlug(ctx.Context(), query.FindGameBySlugParams{
 		DevSlug:  devSlug,
 		GameSlug: gameSlug,
 	})
@@ -312,7 +311,7 @@ func viewAdminGamesRead(ctx *fiber.Ctx) error {
 		// TODO: handle error
 	}
 
-	achievements, achievementsErr := Queries.GetGameAchievements(ctx.Context(), game.ID)
+	achievements, achievementsErr := db.Queries.GetGameAchievements(ctx.Context(), game.ID)
 	if achievementsErr != nil && !errors.Is(achievementsErr, sql.ErrNoRows) {
 		// TODO: handle error
 	}
@@ -352,7 +351,7 @@ func viewAdminGameAchievementsRead(ctx *fiber.Ctx) error {
 		return ctx.Redirect("/admin/developers/@/games")
 	}
 
-	achievement, achievementErr := Queries.FindAchievementBySlug(ctx.Context(), query.FindAchievementBySlugParams{
+	achievement, achievementErr := db.Queries.FindAchievementBySlug(ctx.Context(), query.FindAchievementBySlugParams{
 		DevSlug:  devSlug,
 		GameSlug: gameSlug,
 		AchSlug:  achievementSlug,
@@ -424,7 +423,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 		return ctx.SendStatus(fiber.StatusBadRequest)
 	}
 
-	game, gameErr := Queries.FindGameBySlug(ctx.Context(), query.FindGameBySlugParams{
+	game, gameErr := db.Queries.FindGameBySlug(ctx.Context(), query.FindGameBySlugParams{
 		DevSlug:  devSlug,
 		GameSlug: gameSlug,
 	})
@@ -438,7 +437,7 @@ func viewAdminGameAchievementsCreateOrUpdate(ctx *fiber.Ctx) error {
 		return ctx.SendStatus(fiber.StatusInternalServerError)
 	}
 
-	isNew, createErr := Queries.UpsertAchievement(ctx.Context(), query.UpsertAchievementParams{
+	isNew, createErr := db.Queries.UpsertAchievement(ctx.Context(), query.UpsertAchievementParams{
 		GameID:              game.ID,
 		Slug:                achievementSlug,
 		Name:                request.Name,

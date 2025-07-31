@@ -4,11 +4,15 @@ import (
 	"context"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
+	"github.com/dresswithpockets/openstats/app/auth"
+	"github.com/dresswithpockets/openstats/app/db"
+	"github.com/dresswithpockets/openstats/app/users"
+	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/cors"
 	"log"
 	"net/http"
-
-	"github.com/rs/cors"
+	"reflect"
 )
 
 func HandlerTODO(ctx context.Context, input *struct{}) (*struct{}, error) {
@@ -16,17 +20,17 @@ func HandlerTODO(ctx context.Context, input *struct{}) (*struct{}, error) {
 }
 
 func main() {
-	if err := SetupDB(context.Background()); err != nil {
+	if err := db.SetupDB(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := SetupValidations(); err != nil {
+	if err := validation.SetupValidations(); err != nil {
 		log.Fatal(err)
 	}
 
 	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
 	// other admins
-	AddRootAdminUser(context.Background())
+	auth.AddRootAdminUser(context.Background())
 
 	router := chi.NewMux()
 	router.Use(cors.New(cors.Options{
@@ -56,12 +60,13 @@ func main() {
 			Type:        "apiKey",
 			In:          "cookie",
 			Description: "A basic user authentication, typically created by sign-up or sign-in",
-			Name:        SessionCookieName,
+			Name:        auth.SessionCookieName,
 		},
 	}
-	api := humachi.New(router, config)
 
-	requireUserAuthHandler := NewRequireUserAuthMiddleware(api)
+	huma.SchemaFromType(config.OpenAPI.Components.Schemas, reflect.TypeFor[validation.LookupID]())
+
+	api := humachi.New(router, config)
 
 	type ReadyResponse struct{ OK bool }
 	huma.Register(api, huma.Operation{
@@ -75,143 +80,46 @@ func main() {
 		return &ReadyResponse{OK: true}, nil
 	})
 
-	authApi := huma.NewGroup(api, "/auth/v1")
-	authApi.UseSimpleModifier(func(op *huma.Operation) {
-		op.Tags = append(op.Tags, "Authentication v1")
-	})
-	authApi.UseMiddleware(UserAuthHandler)
+	auth.RegisterRoutes(api)
+	users.RegisterRoutes(api)
 
-	huma.Register(authApi, huma.Operation{
-		OperationID: "get-session",
-		Method:      http.MethodGet,
-		Path:        "/session",
-		Summary:     "Get session info",
-		Description: "Get the current authenticated session's user info",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserAuthHandler.Handler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandleGetSession)
+	// TODO: permissions verification mechanism
+	//  Actions:
+	//   Create
+	//   Read
+	//   Update
+	//   Delete
 
-	huma.Register(authApi, huma.Operation{
-		OperationID: "sign-in",
-		Method:      http.MethodPost,
-		Path:        "/sign-in",
-		Summary:     "Sign In",
-		Description: "Sign into a new session",
-		Errors: []int{
-			http.StatusUnauthorized,
-			http.StatusBadRequest,
-		},
-	}, HandlePostSignIn)
+	/*
+		TODO: example resource with variable authorization requirements:
+			- Root can Create, Read, Update, Delete any non-Root User
+			- Admins can Create, Read, Update, Delete any non-Admin User
+			- Anyone can Read any User
+			- A User may Update their own User
 
-	huma.Register(authApi, huma.Operation{
-		OperationID: "sign-up",
-		Method:      http.MethodPost,
-		Path:        "/sign-up",
-		Summary:     "Sign Up",
-		Description: "Create a new user and sign into a new session as the new user",
-		Errors: []int{
-			http.StatusUnauthorized,
-			http.StatusBadRequest,
-		},
-	}, HandlePostSignUp)
+		CanRead() = true
+		CanCreate() = (IsRoot(CurrentUser) and IsNotRoot(CreatedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(CreatedUser))
+		CanUpdate() = (IsRoot(CurrentUser) and IsNotRoot(UpdatedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(UpdatedUser)) or (CurrentUser == UpdatedUser)
+		CanDelete() = (IsRoot(CurrentUser) and IsNotRoot(DeletedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(DeletedUser))
+	*/
 
-	huma.Register(authApi, huma.Operation{
-		OperationID: "sign-out",
-		Method:      http.MethodPost,
-		Path:        "/sign-out",
-		Summary:     "Sign Out",
-		Description: "Sign out of the current session, and invalidate the session token",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserAuthHandler.Handler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlePostSignOut)
+	// TODO:
+	//  /users/v1 - query & filter all users
+	//  /users/v1/{slug} - CRUD information about the user (slug, UUID, display name)
+	//  /users/v1/{slug}/developers - query & filter developers the user is a member of
+	//  /users/v1/{slug}/games - query & filter games with sessions/stats/achievements for the user
+	//  /users/v1/{slug}/sessions - query & filter play sessions for the user
+	//  /users/v1/{slug}/achievements - query & filter achievement progress for the user
+	//  /users/v1/{slug}/tokens
+	//  /users/v1/{slug}/tokens/{slug}
 
-	userApi := huma.NewGroup(api, "/users/v1")
-	userApi.UseSimpleModifier(func(op *huma.Operation) {
-		op.Tags = append(op.Tags, "Users")
-	})
-	userApi.UseMiddleware(UserAuthHandler)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "get-users-brief",
-		Method:      http.MethodGet,
-		Path:        "/{slug}/brief",
-		Summary:     "Get user brief",
-		Description: "Get a detail summary containing the user's recent achievements, for display",
-	}, HandleGetUsersBrief)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "list-users",
-		Method:      http.MethodGet,
-		Path:        "/",
-		Summary:     "List users",
-		Description: "Query & filter all users",
-	}, HandlerTODO)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "create-users",
-		Method:      http.MethodPost,
-		Path:        "/",
-		Summary:     "Create new users",
-		Description: "Create 1 or more users. Requires an admin session.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserAuthHandler.Handler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "read-user",
-		Method:      http.MethodGet,
-		Path:        "/{slug}",
-		Summary:     "Read user",
-		Description: "Get some details for a particular user",
-	}, HandlerTODO)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "upsert-user",
-		Method:      http.MethodPut,
-		Path:        "/{slug}",
-		Summary:     "Create or update user",
-		Description: "Create or update a user at the slug specified. This is an upsert operation - it will try to create the user if it doesn't already exist, and will otherwise update an existing user.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserAuthHandler.Handler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "patch-user",
-		Method:      http.MethodPatch,
-		Path:        "/{slug}",
-		Summary:     "Update user",
-		Description: "Update an existing user at the slug.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserAuthHandler.Handler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
-
-	huma.Register(userApi, huma.Operation{
-		OperationID: "delete-user",
-		Method:      http.MethodDelete,
-		Path:        "/{slug}",
-		Summary:     "Delete a user",
-		Description: "Delete an existing user at the slug. Must be an Admin.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserAuthHandler.Handler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
+	// TODO:
+	//  /developers/v1
+	//  /developers/v1/{slug}/members
+	//  /developers/v1/{slug}/games
+	//  /developers/v1/{slug}/games/{slug}
+	//  /developers/v1/{slug}/games/{slug}/achievements
+	//  /developers/v1/{slug}/games/{slug}/achievements/{slug}
 
 	if err := http.ListenAndServe(":3000", router); err != nil {
 		log.Fatal(err)
