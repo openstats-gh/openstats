@@ -17,12 +17,45 @@ import (
 	"time"
 )
 
-type TODORequest struct {
-	RID rid.RID `query:"rid"`
+// User resource returned by users/ endpoints
+type User struct {
+	RID         rid.RID   `json:"rid" readOnly:"true"`
+	CreatedAt   time.Time `json:"createdAt" readOnly:"true"`
+	Slug        string    `json:"slug"`
+	DisplayName string    `json:"displayName,omitempty"`
+	BioText     string    `json:"bioText,omitempty"`
+	AvatarUrl   string    `json:"avatarUrl,omitempty" readOnly:"true"`
+	Email       string    `json:"email,omitempty"`
+	Password    string    `json:"password,omitempty" writeOnly:"true"`
 }
 
-func HandlerTODO(ctx context.Context, input *TODORequest) (*struct{}, error) {
-	panic("HandlerTODO")
+type UnlockedAchievementInfo struct {
+	DeveloperSlug string
+	GameSlug      string
+	GameName      string
+	Slug          string
+	Name          string
+	Description   string
+}
+
+type OtherUserUnlockedAchievementInfo struct {
+	DeveloperSlug    string
+	GameSlug         string
+	GameName         string
+	Slug             string
+	Name             string
+	Description      string
+	UserRID          rid.RID
+	UserFriendlyName string
+}
+
+type UserBrief struct {
+	Unlocks          []UnlockedAchievementInfo          `json:"unlocks"`
+	OtherUserUnlocks []OtherUserUnlockedAchievementInfo `json:"otherUserUnlocks"`
+}
+
+type UserBriefBody struct {
+	UserBrief UserBrief `json:"userBrief"`
 }
 
 func RegisterRoutes(api huma.API) {
