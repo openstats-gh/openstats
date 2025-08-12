@@ -3,11 +3,15 @@ package db
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/dresswithpockets/openstats/app/db/query"
+	"github.com/dresswithpockets/openstats/app/rid"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"time"
 )
 
 var ErrSlugAlreadyInUse = errors.New("slug already in use")
@@ -121,6 +125,68 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 	}
 
 	return &user, nil
+}
+
+func (a *Actions) UpdateUserProfile(ctx context.Context, uuid uuid.UUID, slug, displayName *string) error {
+	tx, txErr := a.pool.BeginTx(ctx, pgx.TxOptions{})
+	if txErr != nil {
+		return txErr
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer tx.Rollback(ctx)
+
+	return tx.Commit(ctx)
+}
+
+func (a *Actions) CreateGameSessionAndToken(
+	ctx context.Context,
+	gameToken uuid.UUID,
+	userRid, gameRid rid.RID,
+	issuer, audience string,
+	duration time.Duration,
+	jitter time.Duration,
+) (token query.Token, session query.GameSession, err error) {
+	var tx pgx.Tx
+	tx, err = a.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer tx.Rollback(ctx)
+
+	qtx := a.queries.WithTx(tx)
+	session, err = qtx.CreateGameSession(ctx, query.CreateGameSessionParams{
+		GameUuid:      gameRid.ID,
+		UserUuid:      userRid.ID,
+		GameTokenUuid: gameToken,
+	})
+	if err != nil {
+		return
+	}
+
+	sessionRid := rid.From("gs", session.Uuid)
+	subject := fmt.Sprintf("users/v1/%s/games/%s/sessions/%s", userRid.String(), gameRid.String(), sessionRid.String())
+
+	nowTime := time.Now().UTC()
+	token, err = qtx.CreateToken(ctx, query.CreateTokenParams{
+		Issuer:    issuer,
+		Subject:   subject,
+		Audience:  audience,
+		ExpiresAt: nowTime.Add(duration),
+		NotBefore: nowTime.Add(-jitter),
+		IssuedAt:  nowTime,
+	})
+	if err != nil {
+		return
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return
+	}
+
+	return
 }
 
 //type CreateUserParams struct {

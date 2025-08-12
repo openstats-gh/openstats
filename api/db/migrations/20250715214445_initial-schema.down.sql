@@ -1,4 +1,5 @@
 drop table if exists game_session;
+drop table if exists game_token;
 drop table if exists token_disallow_list;
 drop table if exists token;
 drop table if exists achievement_progress;

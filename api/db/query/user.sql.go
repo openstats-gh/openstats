@@ -10,11 +10,10 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addUser = `-- name: AddUser :one
-insert into users (slug) values ($1) returning id, created_at, updated_at, lookup_id, slug
+insert into users (slug) values ($1) returning id, created_at, updated_at, uuid, slug
 `
 
 func (q *Queries) AddUser(ctx context.Context, slug string) (User, error) {
@@ -24,7 +23,7 @@ func (q *Queries) AddUser(ctx context.Context, slug string) (User, error) {
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LookupID,
+		&i.Uuid,
 		&i.Slug,
 	)
 	return i, err
@@ -72,11 +71,6 @@ func (q *Queries) AddUserPassword(ctx context.Context, arg AddUserPasswordParams
 	return err
 }
 
-type AddUserSlugHistoriesParams struct {
-	UserID int32
-	Slug   string
-}
-
 const addUserSlugHistory = `-- name: AddUserSlugHistory :exec
 insert into user_slug_history(user_id, slug) values ($1, $2)
 `
@@ -92,7 +86,7 @@ func (q *Queries) AddUserSlugHistory(ctx context.Context, arg AddUserSlugHistory
 }
 
 const allUsersWithDisplayNames = `-- name: AllUsersWithDisplayNames :many
-select u.id, u.created_at, u.updated_at, u.lookup_id, u.slug, uldn.display_name
+select u.id, u.created_at, u.updated_at, u.uuid, u.slug, uldn.display_name
 from users u
     left outer join user_latest_display_name uldn on u.id = uldn.user_id
 `
@@ -101,9 +95,9 @@ type AllUsersWithDisplayNamesRow struct {
 	ID          int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	LookupID    uuid.UUID
+	Uuid        uuid.UUID
 	Slug        string
-	DisplayName pgtype.Text
+	DisplayName *string
 }
 
 func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithDisplayNamesRow, error) {
@@ -119,7 +113,7 @@ func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithD
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.LookupID,
+			&i.Uuid,
 			&i.Slug,
 			&i.DisplayName,
 		); err != nil {
@@ -134,47 +128,41 @@ func (q *Queries) AllUsersWithDisplayNames(ctx context.Context) ([]AllUsersWithD
 }
 
 const findUser = `-- name: FindUser :one
-select id, created_at, updated_at, lookup_id, slug from users where id = $1 limit 1
+select id, created_at, updated_at, uuid, slug from users where users.uuid = $1 limit 1
 `
 
-func (q *Queries) FindUser(ctx context.Context, id int32) (User, error) {
-	row := q.db.QueryRow(ctx, findUser, id)
+func (q *Queries) FindUser(ctx context.Context, argUuid uuid.UUID) (User, error) {
+	row := q.db.QueryRow(ctx, findUser, argUuid)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LookupID,
+		&i.Uuid,
 		&i.Slug,
 	)
 	return i, err
 }
 
-const findUserByLookupId = `-- name: FindUserByLookupId :one
-select id, created_at, updated_at, lookup_id, slug
-from users
-where lookup_id = $1
-limit 1
+const findUserById = `-- name: FindUserById :one
+select id, created_at, updated_at, uuid, slug from users where users.id = $1 limit 1
 `
 
-func (q *Queries) FindUserByLookupId(ctx context.Context, lookupID uuid.UUID) (User, error) {
-	row := q.db.QueryRow(ctx, findUserByLookupId, lookupID)
+func (q *Queries) FindUserById(ctx context.Context, userID int32) (User, error) {
+	row := q.db.QueryRow(ctx, findUserById, userID)
 	var i User
 	err := row.Scan(
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LookupID,
+		&i.Uuid,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const findUserBySlug = `-- name: FindUserBySlug :one
-select id, created_at, updated_at, lookup_id, slug
-from users
-where slug = $1
-limit 1
+select id, created_at, updated_at, uuid, slug from users where slug = $1 limit 1
 `
 
 func (q *Queries) FindUserBySlug(ctx context.Context, slug string) (User, error) {
@@ -184,14 +172,14 @@ func (q *Queries) FindUserBySlug(ctx context.Context, slug string) (User, error)
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LookupID,
+		&i.Uuid,
 		&i.Slug,
 	)
 	return i, err
 }
 
 const findUserBySlugWithPassword = `-- name: FindUserBySlugWithPassword :one
-select u.id, u.created_at, u.updated_at, u.lookup_id, u.slug, up.encoded_hash
+select u.id, u.created_at, u.updated_at, u.uuid, u.slug, up.encoded_hash
 from users u
      join user_password up on u.id = up.user_id
 where u.slug = $1
@@ -202,7 +190,7 @@ type FindUserBySlugWithPasswordRow struct {
 	ID          int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
-	LookupID    uuid.UUID
+	Uuid        uuid.UUID
 	Slug        string
 	EncodedHash string
 }
@@ -214,48 +202,22 @@ func (q *Queries) FindUserBySlugWithPassword(ctx context.Context, slug string) (
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LookupID,
+		&i.Uuid,
 		&i.Slug,
 		&i.EncodedHash,
 	)
 	return i, err
 }
 
-const findUserUUIDsBySlugs = `-- name: FindUserUUIDsBySlugs :many
-
-select lookup_id from users where slug = any($1)
-`
-
-// Batch Inserts:
-func (q *Queries) FindUserUUIDsBySlugs(ctx context.Context, slugs []string) ([]uuid.UUID, error) {
-	rows, err := q.db.Query(ctx, findUserUUIDsBySlugs, slugs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []uuid.UUID
-	for rows.Next() {
-		var lookup_id uuid.UUID
-		if err := rows.Scan(&lookup_id); err != nil {
-			return nil, err
-		}
-		items = append(items, lookup_id)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements :many
-select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.slug as user_slug, uldn.display_name as user_display_name
+select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, coalesce(uldn.display_name, u.slug) as user_friendly_name
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
      join users u on ap.user_id = u.id
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
      left outer join user_latest_display_name uldn on u.id = uldn.user_id
-where u.slug != $2
+where u.uuid != $2
   and ap.progress >= a.progress_requirement
 order by ap.created_at desc
 limit $1
@@ -263,22 +225,22 @@ limit $1
 
 type GetOtherUserRecentAchievementsParams struct {
 	Limit            int32
-	ExcludedUserSlug string
+	ExcludedUserUuid uuid.UUID
 }
 
 type GetOtherUserRecentAchievementsRow struct {
-	DeveloperSlug   string
-	GameSlug        string
-	GameName        string
-	Slug            string
-	Name            string
-	Description     string
-	UserSlug        string
-	UserDisplayName pgtype.Text
+	DeveloperSlug    string
+	GameSlug         string
+	GameName         string
+	Slug             string
+	Name             string
+	Description      string
+	UserUuid         uuid.UUID
+	UserFriendlyName string
 }
 
 func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOtherUserRecentAchievementsParams) ([]GetOtherUserRecentAchievementsRow, error) {
-	rows, err := q.db.Query(ctx, getOtherUserRecentAchievements, arg.Limit, arg.ExcludedUserSlug)
+	rows, err := q.db.Query(ctx, getOtherUserRecentAchievements, arg.Limit, arg.ExcludedUserUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -293,8 +255,8 @@ func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOth
 			&i.Slug,
 			&i.Name,
 			&i.Description,
-			&i.UserSlug,
-			&i.UserDisplayName,
+			&i.UserUuid,
+			&i.UserFriendlyName,
 		); err != nil {
 			return nil, err
 		}
@@ -430,7 +392,7 @@ from achievement_progress ap
      join users u on ap.user_id = u.id
      join game g on a.game_id = g.id
      join developer d on g.developer_id = d.id
-where u.slug = $2
+where u.uuid = $2
   and ap.progress >= a.progress_requirement
 order by ap.created_at desc
 limit $1
@@ -438,7 +400,7 @@ limit $1
 
 type GetUserRecentAchievementsParams struct {
 	Limit    int32
-	UserSlug string
+	UserUuid uuid.UUID
 }
 
 type GetUserRecentAchievementsRow struct {
@@ -451,7 +413,7 @@ type GetUserRecentAchievementsRow struct {
 }
 
 func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRecentAchievementsParams) ([]GetUserRecentAchievementsRow, error) {
-	rows, err := q.db.Query(ctx, getUserRecentAchievements, arg.Limit, arg.UserSlug)
+	rows, err := q.db.Query(ctx, getUserRecentAchievements, arg.Limit, arg.UserUuid)
 	if err != nil {
 		return nil, err
 	}
@@ -475,4 +437,71 @@ func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRece
 		return nil, err
 	}
 	return items, nil
+}
+
+const getUserSessionProfile = `-- name: GetUserSessionProfile :one
+select u.uuid, u.slug, coalesce(uldn.display_name, ''), u.created_at
+from users u
+     left outer join user_latest_display_name uldn on u.id = uldn.user_id
+where u.uuid = $1
+limit 1
+`
+
+type GetUserSessionProfileRow struct {
+	Uuid        uuid.UUID
+	Slug        string
+	DisplayName string
+	CreatedAt   time.Time
+}
+
+func (q *Queries) GetUserSessionProfile(ctx context.Context, userUuid uuid.UUID) (GetUserSessionProfileRow, error) {
+	row := q.db.QueryRow(ctx, getUserSessionProfile, userUuid)
+	var i GetUserSessionProfileRow
+	err := row.Scan(
+		&i.Uuid,
+		&i.Slug,
+		&i.DisplayName,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getUserUuid = `-- name: GetUserUuid :one
+select uuid from users where slug = $1 limit 1
+`
+
+func (q *Queries) GetUserUuid(ctx context.Context, slug string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getUserUuid, slug)
+	var uuid uuid.UUID
+	err := row.Scan(&uuid)
+	return uuid, err
+}
+
+const updateSessionProfile = `-- name: UpdateSessionProfile :exec
+with target_user as (
+    select u1.id, u1.slug as old_slug, uldn.display_name as latest_display_name
+    from users u1
+         left outer join user_latest_display_name uldn on u1.id = uldn.user_id
+    where u1.uuid = $2
+), _ as (
+    update users u2
+    set slug = cast($3 as text)
+    from target_user
+    where u2.id = target_user.id and cast($3 as text) is not null and cast($3 as text) != target_user.old_slug
+)
+insert into user_display_name (user_id, display_name)
+select target_user.id, cast($1 as text)
+from target_user
+where cast($1 as text) is not null and cast($1 as text) != target_user.latest_display_name
+`
+
+type UpdateSessionProfileParams struct {
+	NewDisplayName *string
+	Uuid           uuid.UUID
+	NewSlug        *string
+}
+
+func (q *Queries) UpdateSessionProfile(ctx context.Context, arg UpdateSessionProfileParams) error {
+	_, err := q.db.Exec(ctx, updateSessionProfile, arg.NewDisplayName, arg.Uuid, arg.NewSlug)
+	return err
 }

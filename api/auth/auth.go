@@ -6,6 +6,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/password"
+	"github.com/dresswithpockets/openstats/app/rid"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -28,6 +29,9 @@ const (
 	SessionDuration     = time.Hour * 24 * 7
 	SessionJitter       = time.Minute
 	PrincipalContextKey = "principal"
+
+	GameSessionIssuer   = "openstats"
+	GameSessionAudience = "openstats"
 )
 
 var SessionTokenSecret = []byte("blahblahblah")
@@ -35,7 +39,7 @@ var SessionTokenSecret = []byte("blahblahblah")
 type Principal struct {
 	User    query.User
 	TokenID uuid.UUID
-	Claims  jwt.RegisteredClaims
+	Claims  *jwt.RegisteredClaims
 }
 
 func GetPrincipal(ctx context.Context) (result *Principal, ok bool) {
@@ -46,6 +50,27 @@ func GetPrincipal(ctx context.Context) (result *Principal, ok bool) {
 
 func HasPrincipal(ctx context.Context) bool {
 	result, ok := ctx.Value(PrincipalContextKey).(*Principal)
+	return ok && result != nil
+}
+
+func GetGameTokenPrincipal(ctx context.Context) (result *GameTokenPrincipal, ok bool) {
+	result, ok = ctx.Value(PrincipalContextKey).(*GameTokenPrincipal)
+	ok = ok && result != nil
+	return
+}
+
+func HasGameTokenPrincipal(ctx context.Context) bool {
+	result, ok := ctx.Value(PrincipalContextKey).(*GameTokenPrincipal)
+	return ok && result != nil
+}
+
+func GetGameSessionPrincipal(ctx context.Context) (result *GameSessionPrincipal, ok bool) {
+	result, ok = ctx.Value(PrincipalContextKey).(*GameSessionPrincipal)
+	ok = ok && result != nil
+	return
+}
+func HasGameSessionPrincipal(ctx context.Context) bool {
+	result, ok := ctx.Value(PrincipalContextKey).(*GameSessionPrincipal)
 	return ok && result != nil
 }
 
@@ -91,6 +116,40 @@ func CreateSessionToken(ctx context.Context, userLookupId uuid.UUID) (signedToke
 		NotBefore: nowTime.Add(-SessionJitter),
 		IssuedAt:  nowTime,
 	})
+	if err != nil {
+		return
+	}
+
+	claims := jwt.RegisteredClaims{
+		Issuer:    token.Issuer,
+		Subject:   token.Subject,
+		Audience:  []string{token.Audience},
+		ExpiresAt: jwt.NewNumericDate(token.ExpiresAt),
+		NotBefore: jwt.NewNumericDate(token.NotBefore),
+		IssuedAt:  jwt.NewNumericDate(token.IssuedAt),
+		ID:        token.ID.String(),
+	}
+
+	signedToken, err = jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(SessionTokenSecret)
+	if err != nil {
+		return
+	}
+
+	return
+}
+
+func CreateGameSessionToken(ctx context.Context, gameTokenUuid uuid.UUID, userRid, gameRid rid.RID) (signedToken string, gameSession query.GameSession, err error) {
+	var token query.Token
+	token, gameSession, err = db.DB.CreateGameSessionAndToken(
+		ctx,
+		gameTokenUuid,
+		userRid,
+		gameRid,
+		GameSessionIssuer,
+		GameSessionAudience,
+		time.Hour,
+		SessionJitter,
+	)
 	if err != nil {
 		return
 	}

@@ -8,360 +8,401 @@ import (
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
+	"github.com/dresswithpockets/openstats/app/rid"
 	"github.com/dresswithpockets/openstats/app/validation"
-	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
 	"github.com/rotisserie/eris"
-	"log"
+	"math/rand"
 	"net/http"
 	"time"
 )
 
-type UnlockedAchievementInfo struct {
-	DeveloperSlug string
-	GameSlug      string
-	GameName      string
-	Slug          string
-	Name          string
-	Description   string
+type TODORequest struct {
+	RID rid.RID `query:"rid"`
 }
 
-type OtherUserUnlockedAchievementInfo struct {
-	DeveloperSlug   string
-	GameSlug        string
-	GameName        string
-	Slug            string
-	Name            string
-	Description     string
-	UserSlug        string
-	UserDisplayName string
+func HandlerTODO(ctx context.Context, input *TODORequest) (*struct{}, error) {
+	panic("HandlerTODO")
 }
 
-// User resource returned by users/ endpoints
-type User struct {
-	LookupID    validation.LookupID `json:"lookupId"`
-	Slug        string              `json:"slug"`
-	DisplayName string              `json:"displayName,omitempty"`
-	Email       string              `json:"email,omitempty"`
-	CreatedAt   time.Time           `json:"createdAt"`
-}
+func RegisterRoutes(api huma.API) {
+	usersApi := huma.NewGroup(api, "/users/v1")
 
-type CreateUser struct {
-	Slug        string `json:"slug"`
-	Password    string `json:"password"`
-	DisplayName string `json:"displayName,omitempty"`
-	Email       string `json:"email,omitempty"`
-}
-
-type MutateUser struct {
-	Slug        string `json:"slug,omitempty"`
-	DisplayName string `json:"displayName,omitempty"`
-	Email       string `json:"email,omitempty"`
-	Password    string `json:"password,omitempty"`
-}
-
-type UserBriefBody struct {
-	Unlocks          []UnlockedAchievementInfo
-	OtherUserUnlocks []OtherUserUnlockedAchievementInfo
-}
-
-type UserBriefResponse struct {
-	Body UserBriefBody
-}
-
-type UserBriefRequest struct {
-	Slug string `path:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
-}
-
-func HandleGetUsersBrief(ctx context.Context, input *UserBriefRequest) (*UserBriefResponse, error) {
-	recentUserAchievements, err := db.Queries.GetUserRecentAchievements(ctx, query.GetUserRecentAchievementsParams{
-		UserSlug: input.Slug,
-		Limit:    20,
+	requireGameTokenAuthHandler := auth.CreateRequireGameTokenAuthHandler(usersApi)
+	requireGameSessionAuthHandler := auth.CreateRequireGameSessionAuthHandler(usersApi)
+	usersApi.UseSimpleModifier(func(op *huma.Operation) {
+		op.Tags = append(op.Tags, "Users")
 	})
 
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Println(err)
-		return nil, err
-	}
+	huma.Register(usersApi, huma.Operation{
+		Path:        "/",
+		OperationID: "internal-i-users-get",
+		Method:      http.MethodGet,
+		Security:    []map[string][]string{{"GameToken": {}}},
+		Middlewares: huma.Middlewares{auth.GameTokenAuthHandler, requireGameTokenAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
+		Summary:     "Get users",
+		Description: "Search all users by various criteria",
+	}, HandleSearchUsers)
 
-	recentOtherUserAchievements, err := db.Queries.GetOtherUserRecentAchievements(ctx, query.GetOtherUserRecentAchievementsParams{
-		ExcludedUserSlug: input.Slug,
-		Limit:            20,
-	})
+	huma.Register(usersApi, huma.Operation{
+		Path:        "/{user}/games/{game}/sessions",
+		OperationID: "users-create-game-session",
+		Method:      http.MethodPost,
+		Security:    []map[string][]string{{"GameToken": {}}},
+		Middlewares: huma.Middlewares{auth.GameTokenAuthHandler, requireGameTokenAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
+		Summary:     "Create a game session",
+		Description: "Create a new game session. Game Sessions are used to track playtime, stats, and achievements.",
+	}, HandleCreateGameSession)
 
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Println(err)
-		return nil, err
-	}
+	huma.Register(usersApi, huma.Operation{
+		Path:        "/{user}/games/{game}/sessions/{session}/heartbeat",
+		OperationID: "users-game-session-heartbeat",
+		Method:      http.MethodPost,
+		Security:    []map[string][]string{{"GameSession": {}}},
+		Middlewares: huma.Middlewares{auth.GameSessionAuthHandler, requireGameSessionAuthHandler},
+		Summary:     "Refresh the game session",
+		Description: "Refresh the game session. Update the session's last pulse, and generate a new game session token if the expiration is too close.",
+	}, HandleHeartbeatGameSession)
 
-	var unlocks []UnlockedAchievementInfo
-	for _, row := range recentUserAchievements {
-		unlocks = append(unlocks, UnlockedAchievementInfo{
-			DeveloperSlug: row.DeveloperSlug,
-			GameSlug:      row.GameSlug,
-			GameName:      row.GameName,
-			Slug:          row.Slug,
-			Name:          row.Name,
-			Description:   row.Description,
-		})
-	}
+	huma.Register(usersApi, huma.Operation{
+		Path:        "/{user}/games/{game}/achievements",
+		OperationID: "internal-j-users-get-achievements",
+		Method:      http.MethodGet,
+		Security:    []map[string][]string{{"GameSession": {}}},
+		Middlewares: huma.Middlewares{auth.GameSessionAuthHandler, requireGameSessionAuthHandler},
+		Summary:     "Get a user's achievements",
+		Description: "Get a user's achievement progress for the game associated with the session",
+	}, HandleGetUserAchievements)
 
-	var otherUserUnlocks []OtherUserUnlockedAchievementInfo
-	for _, row := range recentOtherUserAchievements {
-		userDisplayName := ""
-		if row.UserDisplayName.Valid {
-			userDisplayName = row.UserDisplayName.String
-		}
-
-		otherUserUnlocks = append(otherUserUnlocks, OtherUserUnlockedAchievementInfo{
-			DeveloperSlug:   row.DeveloperSlug,
-			GameSlug:        row.GameSlug,
-			GameName:        row.GameName,
-			Slug:            row.Slug,
-			Name:            row.Name,
-			Description:     row.Description,
-			UserSlug:        row.UserSlug,
-			UserDisplayName: userDisplayName,
-		})
-	}
-
-	return &UserBriefResponse{
-		Body: UserBriefBody{
-			Unlocks:          unlocks,
-			OtherUserUnlocks: otherUserUnlocks,
-		},
-	}, nil
+	huma.Register(usersApi, huma.Operation{
+		Path:        "/{user}/games/{game}/achievements",
+		OperationID: "users-game-session-set-progress",
+		Method:      http.MethodPost,
+		Security:    []map[string][]string{{"GameSession": {}}},
+		Middlewares: huma.Middlewares{auth.GameSessionAuthHandler, requireGameSessionAuthHandler},
+		Summary:     "Add achievement progress",
+		Description: "Add new progress to one or multiple achievements for a particular user. Any progress that's lower than the user's current progress for the associated achievement will be ignored.",
+	}, HandleSetUserProgress)
 }
 
-type ListUsersRequest struct {
-	// TODO: oneOf Slug and SlugContains
-	Slug         validation.Optional[string]              `query:"slug"`
-	SlugContains validation.Optional[string]              `query:"slugContains"`
-	Limit        validation.Optional[int]                 `query:"limit" minimum:"10" maximum:"50" doc:"default = 10"`
-	After        validation.Optional[validation.LookupID] `query:"after" format:"uuid"`
+type SearchUsersRequest struct {
+	SlugLike string                       `query:"slugLike" required:"true"`
+	After    validation.Optional[rid.RID] `query:"after,omitempty"`
+	Limit    validation.Optional[int]     `query:"limit" minimum:"10" maximum:"50" doc:"default = 10"`
 }
 
-type ListUsersBody struct {
+type UserList struct {
 	Users []User `json:"users"`
 }
 
-type ListUsersResponse struct {
-	Body ListUsersBody
+type SearchUsersResponse struct {
+	Body UserList
 }
 
-func HandleListUsers(ctx context.Context, input *ListUsersRequest) (*ListUsersResponse, error) {
-	// TODO: only include displayName and email upon request
-	// TODO: limit email access to Admin or authenticated user matching user in query
-	builder := db.DB.Builder().
-		Select("u.lookup_id", "u.slug", "coalesce(uldn.display_name, '')", "coalesce(ule.email, '')", "u.created_at").
-		From("users u").
-		JoinClause("left outer join user_latest_display_name uldn on u.id = uldn.user_id").
-		JoinClause("left outer join user_latest_email ule on u.id = ule.user_id").
-		OrderBy("u.lookup_id desc")
-
-	if input.Slug.HasValue {
-		builder = builder.Where("u.slug = ?", input.Slug.Value)
-	} else if input.SlugContains.HasValue {
-		builder = builder.Where("u.slug like ?", "%"+input.SlugContains.Value+"%")
+func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchUsersResponse, error) {
+	// TODO: a huma validator for rid prefix...
+	if input.After.HasValue && input.After.Value.Prefix != auth.UserRidPrefix {
+		return nil, huma.Error400BadRequest("invalid user id")
 	}
 
+	// TODO: searching with the GameToken principal should only yield results for players which have an association with
+	//       the game (maybe not?)
+
+	builder := db.DB.Builder().
+		Select("u.uuid", "u.created_at", "u.slug", "coalesce(uldn.display_name, '')").
+		From("users u").
+		JoinClause("left outer join user_latest_display_name uldn on u.id = uldn.user_id").
+		Where("u.slug like ?", "%"+input.SlugLike+"%").
+		OrderBy("u.uuid desc")
+
 	if input.After.HasValue {
-		builder = builder.Where("u.lookup_id > ?", input.After.Value)
+		builder = builder.Where("u.uuid > ?", input.After.Value.ID)
 	}
 
 	limit := input.Limit.ValueOr(10)
 	builder = builder.Limit(uint64(limit))
 
 	rows, queryErr := db.DB.Query(ctx, builder)
-	if queryErr != nil {
+	if queryErr != nil && !errors.Is(queryErr, sql.ErrNoRows) {
 		return nil, eris.Wrap(queryErr, "")
 	}
 
 	defer rows.Close()
 
-	var users []User
+	var items []User
 	for rows.Next() {
+		var userUuid uuid.UUID
 		var item User
+
 		if scanErr := rows.Scan(
-			&item.LookupID,
+			&userUuid,
+			&item.CreatedAt,
 			&item.Slug,
 			&item.DisplayName,
-			&item.Email,
-			&item.CreatedAt,
+			// TODO: BioText, AvatarUrl
 		); scanErr != nil {
 			return nil, eris.Wrap(scanErr, "")
 		}
 
-		users = append(users, item)
+		item.RID = rid.From(auth.UserRidPrefix, userUuid)
+		items = append(items, item)
 	}
 
-	return &ListUsersResponse{
-		Body: ListUsersBody{
-			Users: users,
+	return &SearchUsersResponse{
+		Body: UserList{
+			Users: items,
 		},
 	}, nil
 }
 
-type ReadUserRequest struct {
-	Slug string `path:"slug"`
+type Game struct {
+	RID       rid.RID   `json:"rid" readOnly:"true"`
+	CreatedAt time.Time `json:"createdAt" readOnly:"true"`
+	Slug      string    `json:"slug"`
 }
 
-type ReadUserResponse struct {
-	Body struct {
-		User User `json:"user"`
-	}
+type GameSession struct {
+	RID            rid.RID   `json:"rid" readOnly:"true"`
+	LastPulse      time.Time `json:"lastPulse" readOnly:"true"`
+	NextPulseAfter int       `json:"nextPulseAfter" readOnly:"true" doc:"the number of minutes before your next heartbeat. Always send your next heartbeat as close to this amount of time after the response is received, otherwise the API cannot guarantee that the JWT will continue to be valid for the next heartbeat."`
+	User           User      `json:"user" readOnly:"true"`
+	Game           Game      `json:"game" readOnly:"true"`
 }
 
-func HandleReadUser(ctx context.Context, input *ReadUserRequest) (*ReadUserResponse, error) {
-	// TODO: only include displayName and email upon request
-	// TODO: limit email access to Admin or authenticated user matching user in query
-	builder := db.DB.Builder().
-		Select("u.lookup_id", "u.slug", "coalesce(uldn.display_name, '')", "coalesce(ule.email, '')", "u.created_at").
-		From("users u").
-		JoinClause("left outer join user_latest_display_name uldn on u.id = uldn.user_id").
-		JoinClause("left outer join user_latest_email ule on u.id = ule.user_id").
-		Where("u.slug = ?", input.Slug)
-
-	var result ReadUserResponse
-	scanErr := db.DB.ScanRow(
-		ctx,
-		builder,
-		&result.Body.User.LookupID,
-		&result.Body.User.Slug,
-		&result.Body.User.DisplayName,
-		&result.Body.User.Email,
-		&result.Body.User.CreatedAt,
-	)
-	if errors.Is(scanErr, pgx.ErrNoRows) {
-		return nil, huma.Error404NotFound("no user with matching slug")
-	}
-	if scanErr != nil {
-		return nil, eris.Wrap(scanErr, "")
-	}
-
-	return &result, nil
+type CreateGameSessionInput struct {
+	User rid.RID `path:"user"`
+	Game rid.RID `path:"game"`
 }
 
-type PutUserRequest struct {
-	User CreateUser `json:"user"`
+type CreateGameSessionOutput struct {
+	Token string "header:\"X-Game-Session-Token\" doc:\"Contains the JWT authorized for the new Game Session. Authenticate your future requests in the `Authorization` header as a Bearer token.\""
+	Body  GameSession
 }
 
-type PutUserResponseBody struct {
-	User User `json:"user"`
-}
-
-type PutUserResponse struct {
-	Status int
-	Body   PutUserResponseBody
-}
-
-func HandlePutUser(ctx context.Context, input *PutUserRequest) (*PutUserResponse, error) {
-	principal, hasPrincipal := auth.GetPrincipal(ctx)
+func HandleCreateGameSession(ctx context.Context, input *CreateGameSessionInput) (*CreateGameSessionOutput, error) {
+	principal, hasPrincipal := auth.GetGameTokenPrincipal(ctx)
 	if !hasPrincipal {
-		return nil, huma.Error401Unauthorized("a session is required")
+		return nil, huma.Error401Unauthorized("creating a Game Session requires a user-supplied Game Token")
 	}
 
-	// TODO: let Root user flag users as Admin
-	if !auth.IsAdmin(principal.User) {
-		return nil, huma.Error401Unauthorized("you are not authorized to create this user")
+	if input.User.ID != principal.UserRid.ID || input.Game.ID != principal.GameRid.ID {
+		return nil, huma.Error401Unauthorized("sessions may only be created for the user and game that the Game Token is associated with")
 	}
 
-	newUser, err := auth.AddNewUser(ctx, input.User.DisplayName, input.User.Email, input.User.Slug, input.User.Password)
-	if errors.Is(err, db.ErrSlugAlreadyInUse) {
-		// TODO: better conflict mechanism (take advantage of problem details, huma.ErrorDetailer?)
-		return nil, huma.Error409Conflict("slug is already in use")
-	}
-
+	signedToken, gameSession, err := auth.CreateGameSessionToken(ctx, principal.TokenUuid, principal.UserRid, principal.GameRid)
 	if err != nil {
 		return nil, err
 	}
 
-	return &PutUserResponse{
-		Status: http.StatusCreated,
-		Body: PutUserResponseBody{
+	user, userErr := db.Queries.FindUserById(ctx, gameSession.UserID)
+	if userErr != nil {
+		return nil, userErr
+	}
+
+	game, gameErr := db.Queries.FindGameById(ctx, gameSession.GameID)
+	if gameErr != nil {
+		return nil, gameErr
+	}
+
+	pulseJitter := rand.Intn(10) - 5
+	nextPulseDuration := 10 + pulseJitter
+
+	return &CreateGameSessionOutput{
+		Token: signedToken,
+		Body: GameSession{
+			RID:            rid.From(auth.GameSessionRidPrefix, gameSession.Uuid),
+			LastPulse:      gameSession.LastPulseAt,
+			NextPulseAfter: nextPulseDuration,
 			User: User{
-				LookupID:    validation.LookupID(newUser.LookupID),
-				Slug:        newUser.Slug,
-				DisplayName: input.User.DisplayName,
-				Email:       input.User.Email,
-				CreatedAt:   newUser.CreatedAt,
+				RID:       rid.From(auth.UserRidPrefix, user.Uuid),
+				CreatedAt: user.CreatedAt,
+				Slug:      user.Slug,
+			},
+			Game: Game{
+				RID:       rid.From(auth.GameRidPrefix, game.Uuid),
+				CreatedAt: game.CreatedAt,
+				Slug:      game.Slug,
 			},
 		},
 	}, nil
 }
 
-func HandlerTODO(ctx context.Context, input *struct{}) (*struct{}, error) {
-	panic("HandlerTODO")
+type HeartbeatGameSessionInput struct {
+	User    rid.RID `path:"user"`
+	Game    rid.RID `path:"game"`
+	Session rid.RID `path:"session"`
 }
 
-func RegisterRoutes(api huma.API) {
-	userApi := huma.NewGroup(api, "/users/v1")
-	userApi.UseSimpleModifier(func(op *huma.Operation) {
-		op.Tags = append(op.Tags, "Users")
+type HeartbeatGameSessionOutput struct {
+	Token *string "header:\"X-Game-Session-Token\" doc:\"If null, continue to use the token that this request was authenticated with. Otherwise, contains a new JWT that you should authenticate future requests with.\""
+	Body  GameSession
+}
+
+func HandleHeartbeatGameSession(ctx context.Context, input *HeartbeatGameSessionInput) (output *HeartbeatGameSessionOutput, err error) {
+	principal, hasPrincipal := auth.GetGameSessionPrincipal(ctx)
+	if !hasPrincipal || input.User.ID != principal.UserRid.ID || input.Game.ID != principal.GameRid.ID || input.Session.ID != principal.SessionRid.ID {
+		return nil, huma.Error401Unauthorized("heartbeats must be authenticated using a Game Session Token")
+	}
+
+	pulseJitter := rand.Intn(10) - 5
+	nextPulseDuration := 10 + pulseJitter
+	// we subtract 1 minute from the nextPulseDirection when getting the nextPulseTime as additional jitter for this
+	// request. We really don't want the caller to have an expired token by the time this request makes its way to us -
+	// otherwise they'd have to create a new game session!
+	nextPulseTime := time.Now().UTC().Add(time.Duration(nextPulseDuration-1) * time.Minute)
+
+	var resultToken *string
+	lastPulseAt := principal.LastPulse
+	gameSessionRid := principal.SessionRid
+	if nextPulseTime.After(principal.ExpiresAt) {
+		// the next pulse will happen too close to the expiration, so we create a new token
+		signedToken, gameSession, createErr := auth.CreateGameSessionToken(ctx, principal.GameTokenUuid, principal.UserRid, principal.GameRid)
+		if createErr != nil {
+			return nil, createErr
+		}
+
+		resultToken = &signedToken
+		lastPulseAt = gameSession.LastPulseAt
+		gameSessionRid = rid.From(auth.GameSessionRidPrefix, gameSession.Uuid)
+	} else {
+		lastPulseAt, err = db.Queries.HeartbeatGameSession(ctx, gameSessionRid.ID)
+		if err != nil {
+			return
+		}
+	}
+
+	user, userErr := db.Queries.FindUser(ctx, principal.UserRid.ID)
+	if userErr != nil {
+		return nil, userErr
+	}
+
+	game, gameErr := db.Queries.FindGame(ctx, principal.GameRid.ID)
+	if gameErr != nil {
+		return nil, gameErr
+	}
+
+	output = &HeartbeatGameSessionOutput{
+		Token: resultToken,
+		Body: GameSession{
+			RID:            gameSessionRid,
+			LastPulse:      lastPulseAt,
+			NextPulseAfter: nextPulseDuration,
+			User: User{
+				RID:       principal.UserRid,
+				CreatedAt: user.CreatedAt,
+				Slug:      user.Slug,
+			},
+			Game: Game{
+				RID:       principal.GameRid,
+				CreatedAt: game.CreatedAt,
+				Slug:      game.Slug,
+			},
+		},
+	}
+
+	return
+}
+
+type GetUserAchievementsRequest struct {
+	User rid.RID `path:"user"`
+	Game rid.RID `path:"game"`
+}
+
+type UserProgress struct {
+	Progress map[string]int32 `json:"progress" doc:"a map of slugs to the user's current progress in the associated achievement'"`
+}
+
+type GetUserAchievementsResponse struct {
+	Body UserProgress
+}
+
+func HandleGetUserAchievements(ctx context.Context, input *GetUserAchievementsRequest) (*GetUserAchievementsResponse, error) {
+	principal, hasPrincipal := auth.GetGameSessionPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("invalid session")
+	}
+
+	if input.User.ID != principal.UserRid.ID {
+		return nil, huma.Error401Unauthorized("you may only get progress for the same user that the session was created for")
+	}
+
+	if input.Game.ID != principal.GameRid.ID {
+		return nil, huma.Error401Unauthorized("you may only get progress for the same game that the session was created for")
+	}
+
+	progressRows, dbErr := db.Queries.GetGameSessionUserProgress(ctx, query.GetGameSessionUserProgressParams{
+		UserUuid: principal.UserRid.ID,
+		GameUuid: principal.GameRid.ID,
 	})
-	userApi.UseMiddleware(auth.UserAuthHandler)
+	if dbErr != nil {
+		return nil, dbErr
+	}
 
-	requireUserHandler := auth.CreateRequireUserAuthHandler(userApi)
+	var resultMap map[string]int32
+	for _, progressRow := range progressRows {
+		resultMap[progressRow.Slug] = progressRow.Progress
+	}
 
-	huma.Register(userApi, huma.Operation{
-		OperationID: "get-users-brief",
-		Method:      http.MethodGet,
-		Path:        "/{slug}/brief",
-		Summary:     "Get user brief",
-		Description: "Get a detail summary containing the user's recent achievements, for display",
-	}, HandleGetUsersBrief)
+	return &GetUserAchievementsResponse{
+		Body: UserProgress{Progress: resultMap},
+	}, nil
+}
 
-	huma.Register(userApi, huma.Operation{
-		OperationID: "list-users",
-		Method:      http.MethodGet,
-		Path:        "/",
-		Summary:     "List users",
-		Description: "Query & filter all users",
-	}, HandleListUsers)
+type SetUserProgressRequest struct {
+	User rid.RID `path:"user"`
+	Game rid.RID `path:"game"`
+	Body UserProgress
+}
 
-	huma.Register(userApi, huma.Operation{
-		OperationID: "read-user",
-		Method:      http.MethodGet,
-		Path:        "/{slug}",
-		Summary:     "Read a user",
-		Description: "Get some details for a particular user",
-	}, HandleReadUser)
+type SetUserProgressResponse struct {
+	Body UserProgress
+}
 
-	huma.Register(userApi, huma.Operation{
-		OperationID: "put-user",
-		Method:      http.MethodPut,
-		Path:        "/{slug}",
-		Summary:     "Create a user",
-		Description: "Create a user at the slug specified.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserHandler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlePutUser)
+func HandleSetUserProgress(ctx context.Context, input *SetUserProgressRequest) (*SetUserProgressResponse, error) {
+	principal, hasPrincipal := auth.GetGameSessionPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("invalid session")
+	}
 
-	huma.Register(userApi, huma.Operation{
-		OperationID: "patch-user",
-		Method:      http.MethodPatch,
-		Path:        "/{slug}",
-		Summary:     "Update a user",
-		Description: "Update an existing user at the slug.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserHandler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
+	if input.User.ID != principal.UserRid.ID {
+		return nil, huma.Error401Unauthorized("you may only update progress for the same user that the session was created for")
+	}
 
-	huma.Register(userApi, huma.Operation{
-		OperationID: "delete-user",
-		Method:      http.MethodDelete,
-		Path:        "/{slug}",
-		Summary:     "Delete a user",
-		Description: "Delete an existing user at the slug. Must be an Admin.",
-		Security:    []map[string][]string{{"Cookie": {}}},
-		Middlewares: huma.Middlewares{requireUserHandler},
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-	}, HandlerTODO)
+	if input.Game.ID != principal.GameRid.ID {
+		return nil, huma.Error401Unauthorized("you may only update progress for the same game that the session was created for")
+	}
+
+	var params []query.UpdateGameSessionUserProgressParams
+	for slug, progress := range input.Body.Progress {
+		params = append(params, query.UpdateGameSessionUserProgressParams{
+			NewProgress:     progress,
+			UserUuid:        input.User.ID,
+			AchievementSlug: slug,
+			GameUuid:        input.Game.ID,
+		})
+	}
+
+	results := map[string]int32{}
+	var batchErr error
+	batchResults := db.Queries.UpdateGameSessionUserProgress(ctx, params)
+	batchResults.QueryRow(func(i int, row query.UpdateGameSessionUserProgressRow, err error) {
+		if errors.Is(err, sql.ErrNoRows) {
+			return
+		}
+
+		if err != nil {
+			batchErr = err
+			return
+		}
+
+		results[row.Slug] = row.Progress
+	})
+
+	if batchErr != nil {
+		return nil, batchErr
+	}
+
+	return &SetUserProgressResponse{
+		Body: UserProgress{Progress: results},
+	}, nil
 }

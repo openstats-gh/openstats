@@ -16,11 +16,13 @@ import (
 )
 
 type SignInRequest struct {
-	// Slug is a unique username for the user
-	Slug string `body:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+	Body struct {
+		// Slug is a unique username for the user
+		Slug string `json:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
 
-	// Password is the user's login password
-	Password string `body:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+		// Password is the user's login password
+		Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	}
 }
 
 type SignInResponse struct {
@@ -28,7 +30,7 @@ type SignInResponse struct {
 }
 
 func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInResponse, error) {
-	result, findErr := db.Queries.FindUserBySlugWithPassword(ctx, loginBody.Slug)
+	result, findErr := db.Queries.FindUserBySlugWithPassword(ctx, loginBody.Body.Slug)
 	if errors.Is(findErr, sql.ErrNoRows) {
 		return nil, huma.Error404NotFound("slug or password don't match")
 	}
@@ -37,7 +39,7 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInRes
 		return nil, findErr
 	}
 
-	verifyErr := password.VerifyPassword(loginBody.Password, result.EncodedHash)
+	verifyErr := password.VerifyPassword(loginBody.Body.Password, result.EncodedHash)
 	if errors.Is(verifyErr, password.ErrHashMismatch) {
 		return nil, huma.Error404NotFound("slug or password don't match")
 	}
@@ -46,17 +48,20 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInRes
 		return nil, verifyErr
 	}
 
-	signedJwt, token, createErr := CreateSessionToken(ctx, result.LookupID)
+	signedJwt, token, createErr := CreateSessionToken(ctx, result.Uuid)
 	if createErr != nil {
 		return nil, createErr
 	}
 
 	return &SignInResponse{
 		SetCookie: http.Cookie{
-			Name:    SessionCookieName,
-			Value:   signedJwt,
-			Expires: token.ExpiresAt,
-			Secure:  true,
+			Name:     SessionCookieName,
+			Path:     "/",
+			Value:    signedJwt,
+			MaxAge:   int(token.ExpiresAt.Sub(time.Now().UTC()).Seconds()),
+			Expires:  token.ExpiresAt,
+			Secure:   false, // TODO: enable Secure in non-local environment
+			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
 }
@@ -78,7 +83,7 @@ func (c ConflictSignUpSlug) ErrorDetail() *huma.ErrorDetail {
 	}
 }
 
-type SignUpRequest struct {
+type SignUpBody struct {
 	// Email is optional, and just used for resetting the user's password
 	Email string `body:"email" format:"email"`
 
@@ -92,6 +97,10 @@ type SignUpRequest struct {
 	Password string `body:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
 }
 
+type SignUpRequest struct {
+	Body SignUpBody
+}
+
 type SignUpResponse struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
 }
@@ -103,16 +112,16 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 
 	newUser, newUserError := AddNewUser(
 		ctx,
-		registerBody.DisplayName,
-		registerBody.Email,
-		registerBody.Slug,
-		registerBody.Password,
+		registerBody.Body.DisplayName,
+		registerBody.Body.Email,
+		registerBody.Body.Slug,
+		registerBody.Body.Password,
 	)
 	if newUserError != nil {
 		if errors.Is(newUserError, db.ErrSlugAlreadyInUse) {
 			return nil, &ConflictSignUpSlug{
 				Location: "body.slug",
-				Slug:     registerBody.Slug,
+				Slug:     registerBody.Body.Slug,
 			}
 		}
 
@@ -123,17 +132,20 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 		return nil, newUserError
 	}
 
-	signedJwt, token, createErr := CreateSessionToken(ctx, newUser.LookupID)
+	signedJwt, token, createErr := CreateSessionToken(ctx, newUser.Uuid)
 	if createErr != nil {
 		return nil, createErr
 	}
 
 	return &SignUpResponse{
 		SetCookie: http.Cookie{
-			Name:    SessionCookieName,
-			Value:   signedJwt,
-			Expires: token.ExpiresAt,
-			Secure:  true,
+			Name:     SessionCookieName,
+			Path:     "/",
+			Value:    signedJwt,
+			MaxAge:   int(token.ExpiresAt.Sub(time.Now().UTC()).Seconds()),
+			Expires:  token.ExpiresAt,
+			Secure:   false, // TODO: enable Secure in non-local environment
+			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
 }
@@ -153,9 +165,13 @@ func HandlePostSignOut(ctx context.Context, input *struct{}) (*SignOutResponse, 
 	// no matter what, always expire the session cookie
 	return &SignOutResponse{
 		SetCookie: http.Cookie{
-			Name:    SessionCookieName,
-			Expires: time.Now(),
-			Secure:  true,
+			Name:     SessionCookieName,
+			Path:     "/",
+			Value:    "",
+			MaxAge:   0,
+			Expires:  time.Now(),
+			Secure:   false, // TODO: enable Secure in non-local environment
+			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
 }
@@ -205,7 +221,7 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/session",
 		Summary:     "Get session info",
 		Description: "Get the current authenticated session's user info",
-		Security:    []map[string][]string{{"Cookie": {}}},
+		Security:    []map[string][]string{{"SessionCookie": {}}},
 		Middlewares: huma.Middlewares{requireUserAuthHandler},
 		Errors: []int{
 			http.StatusUnauthorized,
@@ -242,7 +258,7 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/sign-out",
 		Summary:     "Sign Out",
 		Description: "Sign out of the current session, and invalidate the session token",
-		Security:    []map[string][]string{{"Cookie": {}}},
+		Security:    []map[string][]string{{"SessionCookie": {}}},
 		Middlewares: huma.Middlewares{requireUserAuthHandler},
 		Errors: []int{
 			http.StatusUnauthorized,

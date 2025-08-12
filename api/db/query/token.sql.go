@@ -12,6 +12,64 @@ import (
 	"github.com/google/uuid"
 )
 
+const createGameToken = `-- name: CreateGameToken :one
+with target_user as (
+    select id from users where users.uuid = $3
+), target_game as (
+    select g.id, g.uuid, g.slug, d.slug as developer_slug
+    from game g
+    join developer d on g.developer_id = d.id
+    where g.uuid = $4
+)
+insert into game_token (expires_at, comment, game_id, user_id)
+values ($1, $2, (select id from target_game), (select id from target_user))
+returning
+    game_token.uuid,
+    game_token.expires_at,
+    game_token.created_at,
+    game_token.comment,
+    (select uuid as game_uuid from target_game),
+    (select slug as game_slug from target_game),
+    (select developer_slug from target_game)
+`
+
+type CreateGameTokenParams struct {
+	ExpiresAt time.Time
+	Comment   string
+	UserUuid  uuid.UUID
+	GameUuid  uuid.UUID
+}
+
+type CreateGameTokenRow struct {
+	Uuid          uuid.UUID
+	ExpiresAt     time.Time
+	CreatedAt     time.Time
+	Comment       string
+	GameUuid      uuid.UUID
+	GameSlug      string
+	DeveloperSlug string
+}
+
+func (q *Queries) CreateGameToken(ctx context.Context, arg CreateGameTokenParams) (CreateGameTokenRow, error) {
+	row := q.db.QueryRow(ctx, createGameToken,
+		arg.ExpiresAt,
+		arg.Comment,
+		arg.UserUuid,
+		arg.GameUuid,
+	)
+	var i CreateGameTokenRow
+	err := row.Scan(
+		&i.Uuid,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.Comment,
+		&i.GameUuid,
+		&i.GameSlug,
+		&i.DeveloperSlug,
+	)
+	return i, err
+}
+
 const createToken = `-- name: CreateToken :one
 insert into token (issuer, subject, audience, expires_at, not_before, issued_at)
 values ($1, $2, $3, $4, $5, $6)
@@ -56,4 +114,92 @@ insert into token_disallow_list (token_id) values ($1)
 func (q *Queries) DisallowToken(ctx context.Context, tokenID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, disallowToken, tokenID)
 	return err
+}
+
+const expireToken = `-- name: ExpireToken :execrows
+delete
+from game_token gt
+where gt.user_id = (select u.id from users u where u.uuid = $1)
+  and gt.uuid = $2
+`
+
+type ExpireTokenParams struct {
+	UserUuid uuid.UUID
+	Uuid     uuid.UUID
+}
+
+func (q *Queries) ExpireToken(ctx context.Context, arg ExpireTokenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireToken, arg.UserUuid, arg.Uuid)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const findTokenWithUser = `-- name: FindTokenWithUser :one
+select u.uuid as user_uuid, g.uuid as game_uuid
+from game_token gt
+join game g on gt.game_id = g.id
+join users u on gt.user_id = u.id
+where gt.uuid = $1 and gt.expires_at > now()
+limit 1
+`
+
+type FindTokenWithUserRow struct {
+	UserUuid uuid.UUID
+	GameUuid uuid.UUID
+}
+
+func (q *Queries) FindTokenWithUser(ctx context.Context, argUuid uuid.UUID) (FindTokenWithUserRow, error) {
+	row := q.db.QueryRow(ctx, findTokenWithUser, argUuid)
+	var i FindTokenWithUserRow
+	err := row.Scan(&i.UserUuid, &i.GameUuid)
+	return i, err
+}
+
+const findUserGameTokens = `-- name: FindUserGameTokens :many
+select gt.created_at, gt.expires_at, gt.uuid, gt.comment, g.uuid as game_uuid, g.slug as game_slug, d.slug as developer_slug
+from game_token gt
+join game g on gt.game_id = g.id
+join developer d on g.developer_id = d.id -- TODO: developer_latest_display_name
+join users u on gt.user_id = u.id
+where u.uuid = $1 and gt.expires_at > now()
+`
+
+type FindUserGameTokensRow struct {
+	CreatedAt     time.Time
+	ExpiresAt     time.Time
+	Uuid          uuid.UUID
+	Comment       string
+	GameUuid      uuid.UUID
+	GameSlug      string
+	DeveloperSlug string
+}
+
+func (q *Queries) FindUserGameTokens(ctx context.Context, userUuid uuid.UUID) ([]FindUserGameTokensRow, error) {
+	rows, err := q.db.Query(ctx, findUserGameTokens, userUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []FindUserGameTokensRow
+	for rows.Next() {
+		var i FindUserGameTokensRow
+		if err := rows.Scan(
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.Uuid,
+			&i.Comment,
+			&i.GameUuid,
+			&i.GameSlug,
+			&i.DeveloperSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

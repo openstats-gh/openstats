@@ -8,10 +8,12 @@ package query
 import (
 	"context"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const allGames = `-- name: AllGames :many
-select game.id, game.created_at, game.updated_at, game.developer_id, game.slug, developer.slug as developer_slug
+select game.id, game.created_at, game.updated_at, game.developer_id, game.uuid, game.slug, developer.slug as developer_slug
 from game
      join developer on game.developer_id = developer.id
 `
@@ -21,6 +23,7 @@ type AllGamesRow struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 	DeveloperID   int32
+	Uuid          uuid.UUID
 	Slug          string
 	DeveloperSlug string
 }
@@ -39,6 +42,7 @@ func (q *Queries) AllGames(ctx context.Context) ([]AllGamesRow, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeveloperID,
+			&i.Uuid,
 			&i.Slug,
 			&i.DeveloperSlug,
 		); err != nil {
@@ -52,8 +56,44 @@ func (q *Queries) AllGames(ctx context.Context) ([]AllGamesRow, error) {
 	return items, nil
 }
 
+const findGame = `-- name: FindGame :one
+select id, created_at, updated_at, developer_id, uuid, slug from game where uuid = $1 limit 1
+`
+
+func (q *Queries) FindGame(ctx context.Context, gameUuid uuid.UUID) (Game, error) {
+	row := q.db.QueryRow(ctx, findGame, gameUuid)
+	var i Game
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeveloperID,
+		&i.Uuid,
+		&i.Slug,
+	)
+	return i, err
+}
+
+const findGameById = `-- name: FindGameById :one
+select id, created_at, updated_at, developer_id, uuid, slug from game where id = $1 limit 1
+`
+
+func (q *Queries) FindGameById(ctx context.Context, gameID int32) (Game, error) {
+	row := q.db.QueryRow(ctx, findGameById, gameID)
+	var i Game
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeveloperID,
+		&i.Uuid,
+		&i.Slug,
+	)
+	return i, err
+}
+
 const findGameBySlug = `-- name: FindGameBySlug :one
-select game.id, game.created_at, game.updated_at, game.developer_id, game.slug
+select game.id, game.created_at, game.updated_at, game.developer_id, game.uuid, game.slug
 from game
      join developer on game.developer_id = developer.id
 where game.slug = $1 and developer.slug = $2
@@ -72,6 +112,7 @@ func (q *Queries) FindGameBySlug(ctx context.Context, arg FindGameBySlugParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.DeveloperID,
+		&i.Uuid,
 		&i.Slug,
 	)
 	return i, err

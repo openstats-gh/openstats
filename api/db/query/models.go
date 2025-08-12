@@ -42,6 +42,7 @@ type Developer struct {
 	ID        int32
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	Uuid      uuid.UUID
 	Slug      string
 }
 
@@ -71,16 +72,28 @@ type Game struct {
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 	DeveloperID int32
+	Uuid        uuid.UUID
 	Slug        string
 }
 
 type GameSession struct {
 	ID          uuid.UUID
 	CreatedAt   time.Time
-	TokenID     pgtype.UUID
-	LastPulseAt time.Time
+	Uuid        uuid.UUID
 	GameID      int32
 	UserID      int32
+	GameTokenID int32
+	LastPulseAt time.Time
+}
+
+type GameToken struct {
+	ID        int32
+	CreatedAt time.Time
+	ExpiresAt time.Time
+	Uuid      uuid.UUID
+	Comment   string
+	UserID    int32
+	GameID    int32
 }
 
 type Token struct {
@@ -103,7 +116,7 @@ type User struct {
 	ID        int32
 	CreatedAt time.Time
 	UpdatedAt time.Time
-	LookupID  uuid.UUID
+	Uuid      uuid.UUID
 	Slug      string
 }
 

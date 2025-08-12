@@ -8,12 +8,10 @@ package query
 import (
 	"context"
 	"time"
-
-	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const allDevelopers = `-- name: AllDevelopers :many
-select id, created_at, updated_at, slug from developer
+select id, created_at, updated_at, uuid, slug from developer
 `
 
 func (q *Queries) AllDevelopers(ctx context.Context) ([]Developer, error) {
@@ -29,6 +27,7 @@ func (q *Queries) AllDevelopers(ctx context.Context) ([]Developer, error) {
 			&i.ID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Uuid,
 			&i.Slug,
 		); err != nil {
 			return nil, err
@@ -42,7 +41,7 @@ func (q *Queries) AllDevelopers(ctx context.Context) ([]Developer, error) {
 }
 
 const findDeveloperBySlug = `-- name: FindDeveloperBySlug :one
-select id, created_at, updated_at, slug from developer where slug = $1 limit 1
+select id, created_at, updated_at, uuid, slug from developer where slug = $1 limit 1
 `
 
 func (q *Queries) FindDeveloperBySlug(ctx context.Context, slug string) (Developer, error) {
@@ -52,6 +51,7 @@ func (q *Queries) FindDeveloperBySlug(ctx context.Context, slug string) (Develop
 		&i.ID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Uuid,
 		&i.Slug,
 	)
 	return i, err
@@ -96,7 +96,7 @@ where dm.developer_id = $1
 
 type GetDeveloperMembersRow struct {
 	Slug        string
-	DisplayName pgtype.Text
+	DisplayName *string
 	JoinedAt    time.Time
 }
 

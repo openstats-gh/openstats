@@ -48,11 +48,10 @@ create table if not exists deleted_record
 
 create table if not exists users
 (
-
     id         serial primary key,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
-    lookup_id  uuid        not null default gen_uuid_v7() unique,
+    uuid       uuid        not null default gen_uuid_v7() unique,
     slug       text        not null unique
 );
 create or replace trigger users_moddatetime
@@ -87,9 +86,15 @@ create or replace trigger user_email_moddatetime
 execute function moddatetime(updated_at);
 
 create or replace view user_latest_email as
-select ue1.*
-from user_email ue1
-    left outer join user_email ue2 on ue1.user_id = ue2.user_id and
+select coalesce(ue2.id, ue1.id) as id,
+       coalesce(ue2.created_at, ue1.created_at) as created_at,
+       coalesce(ue2.updated_at, ue1.updated_at) as updated_at,
+       coalesce(ue2.user_id, ue1.user_id) as user_id,
+       coalesce(ue2.email, ue1.email) as email,
+       coalesce(ue2.confirmed_at, ue1.confirmed_at) as confirmed_at
+from users u
+    left outer join user_email ue1 on u.id = ue1.user_id
+    left outer join user_email ue2 on u.id = ue2.user_id and
                                       (ue1.created_at < ue2.created_at or
                                        (ue1.created_at = ue2.created_at and ue1.id < ue2.id));
 
@@ -104,9 +109,13 @@ create table if not exists user_display_name
 create index if not exists user_display_name_created_at on user_display_name(created_at);
 
 create or replace view user_latest_display_name as
-select udn1.*
-from user_display_name udn1
-     left outer join user_display_name udn2 on udn1.user_id = udn2.user_id and
+select coalesce(udn2.id, udn1.id) as id,
+       coalesce(udn2.created_at, udn1.created_at) as created_at,
+       coalesce(udn2.user_id, udn1.user_id) as user_id,
+       coalesce(udn2.display_name, udn1.display_name) as display_name
+from users u
+     left outer join user_display_name udn1 on u.id = udn1.user_id
+     left outer join user_display_name udn2 on u.id = udn2.user_id and
                                                (udn1.created_at < udn2.created_at or
                                                 (udn1.created_at = udn2.created_at and udn1.id < udn2.id));
 
@@ -129,6 +138,7 @@ create table if not exists developer
     id         serial primary key,
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now(),
+    uuid       uuid        not null unique default gen_uuid_v7(),
     slug       text        not null unique
 );
 create or replace trigger developer_moddatetime
@@ -167,6 +177,7 @@ create table if not exists game
     created_at   timestamptz not null default now(),
     updated_at   timestamptz not null default now(),
     developer_id integer     not null references developer,
+    uuid         uuid        not null unique default gen_uuid_v7(),
     slug         text        not null,
 
     unique (developer_id, slug)
@@ -242,13 +253,25 @@ create table if not exists token_disallow_list
     created_at timestamptz not null default now()
 );
 
+create table if not exists game_token
+(
+    id serial primary key,
+    created_at timestamptz not null default now(),
+    expires_at timestamptz not null,
+    uuid     uuid not null unique default gen_uuid_v7(),
+    comment  text not null,
+    user_id  int not null references users,
+    game_id  int not null references game
+);
+
 create table if not exists game_session
 (
     id            uuid primary key     default gen_uuid_v7(),
     created_at    timestamptz not null default now(),
-    token_id      uuid references token,
-    -- last time a pulse was received by the game
-    last_pulse_at timestamptz not null default now(),
+    uuid          uuid        not null unique default gen_uuid_v7(),
     game_id       integer     not null references game,
-    user_id       integer     not null references users
+    user_id       integer     not null references users,
+    game_token_id integer     not null references game_token,
+    -- last time a pulse was received by the game
+    last_pulse_at timestamptz not null default now()
 );
