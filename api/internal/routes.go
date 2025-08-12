@@ -17,10 +17,6 @@ import (
 	"time"
 )
 
-func HandlerTODO(ctx context.Context, input *struct{}) (*struct{}, error) {
-	panic("HandlerTODO")
-}
-
 func RegisterRoutes(api huma.API) {
 	internalApi := huma.NewGroup(api, "/internal")
 

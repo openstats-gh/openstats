@@ -84,74 +84,6 @@ func ensureGameSessionPrincipal(ctx context.Context, claims *jwt.RegisteredClaim
 	}, nil
 }
 
-//func ensureGameSessionPrincipalOld(ctx context.Context, claims *jwt.RegisteredClaims) (principal *GameSessionPrincipal, err error) {
-//	// at the moment there is only one format for Issuer, Subject, and Audience
-//	// Subject identifies the authorized user, in format `users/v1/{userRID}`
-//	userRidString := strings.TrimPrefix(claims.Subject, "users/v1/")
-//	if userRidString == "" || userRidString == claims.Subject {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	userRid, userRidErr := rid.ParseString(userRidString)
-//	if userRidErr != nil || userRid.Prefix != UserRidPrefix {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	if !strings.HasPrefix(claims.Issuer, "users/v1/") || !strings.HasSuffix(claims.Issuer, "/session") {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	// Issuer identifies where the token was issued, in the format `users/v1/{userRID}/sessions`
-//	expectedIssuerString := fmt.Sprintf("users/v1/%s/sessions", userRid.String())
-//	if claims.Issuer != expectedIssuerString {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	// we only produce tokens with a single audience at the moment
-//	if len(claims.Audience) != 1 {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	audience := claims.Audience[0]
-//
-//	// Audience identifies the specific game that this session token is authorized for
-//	// in format `developers/v1/{developerRID}/games/{gameRID}`
-//	var gamesPathStartIndex = strings.Index(audience, "/games/")
-//	var gamePathEndIndex = gamesPathStartIndex + len("/games/")
-//	developerRidString := audience[len("developers/v1/"):gamesPathStartIndex]
-//	gameRidString := audience[gamePathEndIndex:]
-//
-//	developerRid, developerRidErr := rid.ParseString(developerRidString)
-//	if developerRidErr != nil || developerRid.Prefix != "d" {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	gameRid, gameRidErr := rid.ParseString(gameRidString)
-//	if gameRidErr != nil || gameRid.Prefix != "g" {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	result, dbErr := db.Queries.GetGameSessionRidCounts(ctx, query.GetGameSessionRidCountsParams{
-//		UserUuid:      userRid.ID,
-//		DeveloperUuid: developerRid.ID,
-//		GameUuid:      gameRid.ID,
-//	})
-//	if dbErr != nil {
-//		return nil, dbErr
-//	}
-//
-//	// the game and user must exist, and the JWT must not be in the disallow list
-//	if result.GameCount != 1 || result.UserCount != 1 || result.DisallowCount != 0 {
-//		return nil, ErrInvalidGameSessionToken
-//	}
-//
-//	return &GameSessionPrincipal{
-//		UserUuid:      userRid.ID,
-//		DeveloperUuid: developerRid.ID,
-//		GameUuid:      gameRid.ID,
-//	}, nil
-//}
-
 func GameSessionAuthHandler(ctx huma.Context, next func(huma.Context)) {
 	authHeader := ctx.Header("Authorization")
 	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
@@ -343,6 +275,7 @@ func CreateRequireGameSessionAuthHandler(api huma.API) func(ctx huma.Context, ne
 	}
 }
 
+//goland:noinspection GoUnusedExportedFunction
 func CreateRequireAdminAuthHandler(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		// TODO: include role in JWT?

@@ -13,7 +13,6 @@ import (
 	"github.com/rs/cors"
 	"log"
 	"net/http"
-	"reflect"
 )
 
 func main() {
@@ -73,8 +72,6 @@ func main() {
 		},
 	}
 
-	huma.SchemaFromType(config.OpenAPI.Components.Schemas, reflect.TypeFor[validation.LookupID]())
-
 	api := humachi.New(router, config)
 
 	type ReadyResponse struct{ OK bool }
@@ -91,6 +88,10 @@ func main() {
 
 	users.RegisterRoutes(api)
 	internal.RegisterRoutes(api)
+
+	if err := http.ListenAndServe(":3000", router); err != nil {
+		log.Fatal(err)
+	}
 
 	// TODO: permissions verification mechanism
 	//  Actions:

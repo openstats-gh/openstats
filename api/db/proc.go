@@ -127,18 +127,6 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 	return &user, nil
 }
 
-func (a *Actions) UpdateUserProfile(ctx context.Context, uuid uuid.UUID, slug, displayName *string) error {
-	tx, txErr := a.pool.BeginTx(ctx, pgx.TxOptions{})
-	if txErr != nil {
-		return txErr
-	}
-
-	//goland:noinspection GoUnhandledErrorResult
-	defer tx.Rollback(ctx)
-
-	return tx.Commit(ctx)
-}
-
 func (a *Actions) CreateGameSessionAndToken(
 	ctx context.Context,
 	gameToken uuid.UUID,
@@ -188,41 +176,3 @@ func (a *Actions) CreateGameSessionAndToken(
 
 	return
 }
-
-//type CreateUserParams struct {
-//	Slug                string
-//	EncodedPasswordHash string
-//	Email               string
-//	DisplayName         string
-//}
-//
-//func (a *Actions) CreateUsers(ctx context.Context, users []CreateUserParams) ([]uuid.UUID, error) {
-//	tx, txErr := a.pool.BeginTx(ctx, pgx.TxOptions{})
-//	if txErr != nil {
-//		return nil, txErr
-//	}
-//
-//	//goland:noinspection GoUnhandledErrorResult
-//	defer tx.Rollback(ctx)
-//
-//	var slugs []string
-//	for _, user := range users {
-//		slugs = append(slugs, user.Slug)
-//	}
-//	if _, err := Queries.AddUsers(ctx, slugs); err != nil {
-//		return nil, err
-//	}
-//
-//	uuids, uuidsErr := Queries.FindUserUUIDsBySlugs(ctx, slugs)
-//	if uuidsErr != nil {
-//		return nil, uuidsErr
-//	}
-//
-//	Queries.AddUserSlugHistories(ctx)
-//
-//	if err := tx.Commit(ctx); err != nil {
-//		return nil, err
-//	}
-//
-//	return uuids, nil
-//}
