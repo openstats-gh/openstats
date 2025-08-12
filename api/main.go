@@ -16,10 +16,6 @@ import (
 	"reflect"
 )
 
-func HandlerTODO(ctx context.Context, input *struct{}) (*struct{}, error) {
-	panic("HandlerTODO")
-}
-
 func main() {
 	if err := db.SetupDB(context.Background()); err != nil {
 		log.Fatal(err)
@@ -93,7 +89,6 @@ func main() {
 		return &ReadyResponse{OK: true}, nil
 	})
 
-	//auth.RegisterRoutes(api)
 	users.RegisterRoutes(api)
 	internal.RegisterRoutes(api)
 
@@ -116,53 +111,4 @@ func main() {
 		CanUpdate() = (IsRoot(CurrentUser) and IsNotRoot(UpdatedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(UpdatedUser)) or (CurrentUser == UpdatedUser)
 		CanDelete() = (IsRoot(CurrentUser) and IsNotRoot(DeletedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(DeletedUser))
 	*/
-
-	// TODO:
-	//  /users/v1 - query & filter all users
-	//  /users/v1/{slug} - CRUD information about the user (slug, UUID, display name)
-	//  /users/v1/{slug}/developers - query & filter developers the user is a member of
-	//  /users/v1/{slug}/games - query & filter games with sessions/stats/achievements for the user
-	//  /users/v1/{slug}/sessions - query & filter play sessions for the user
-	//  /users/v1/{slug}/achievements - query & filter achievement progress for the user
-	//  /users/v1/{slug}/tokens
-	//  /users/v1/{slug}/tokens/{slug}
-
-	// TODO:
-	//  /developers/v1
-	//  /developers/v1/{slug}/members
-	//  /developers/v1/{slug}/games
-	//  /developers/v1/{slug}/games/{slug}
-	//  /developers/v1/{slug}/games/{slug}/achievements
-	//  /developers/v1/{slug}/games/{slug}/achievements/{slug}
-
-	if err := http.ListenAndServe(":3000", router); err != nil {
-		log.Fatal(err)
-	}
-
-	//ErrorHandler: func(c *fiber.Ctx, err error) error {
-	//	var validationErr *ValidationError
-	//	if errors.As(err, &validationErr) {
-	//		var fieldErrors map[string][]string
-	//		for _, fieldError := range validationErr.Errors {
-	//			detail := GetValidationDetail(fieldError.Field)
-	//			fieldErrors[fieldError.Field] = append(fieldErrors[fieldError.Field], detail)
-	//		}
-	//
-	//		c.Status(fiber.StatusBadRequest)
-	//		return c.JSON(problems.Validation("", fieldErrors))
-	//	}
-	//
-	//	var conflictErr *ConflictError
-	//	if errors.As(err, &conflictErr) {
-	//		c.Status(fiber.StatusConflict)
-	//		return c.JSON(problems.Conflict(conflictErr.Field, conflictErr.Value, ""))
-	//	}
-	//
-	//	// TODO: request IDs to associate with errors
-	//	// TODO: setup default logger to output in a queryable format e.g JSON
-	//	log.Error(err)
-	//
-	//	// TODO: replace err with non-descriptive "An error occurred on the server" in production
-	//	return fiber.DefaultErrorHandler(c, err)
-	//},
 }
