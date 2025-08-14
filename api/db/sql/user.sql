@@ -17,6 +17,13 @@ from users u
 where u.uuid = @user_uuid
 limit 1;
 
+-- name: GetUserWithName :one
+select u.uuid, u.created_at, u.slug, coalesce(uldn.display_name, '')
+from users u
+    left outer join user_latest_display_name uldn on u.id = uldn.user_id
+where u.uuid = @user_uuid
+limit 1;
+
 -- name: UpdateSessionProfile :exec
 with target_user as (
     select u1.id, u1.slug as old_slug, uldn.display_name as latest_display_name

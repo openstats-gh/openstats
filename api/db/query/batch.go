@@ -21,7 +21,7 @@ const updateGameSessionUserProgress = `-- name: UpdateGameSessionUserProgress :b
 with target_user as (
     select id from users where users.uuid = $2
 ), target_achievement as (
-    select a.id, a.slug
+    select a.id, a.slug, a.progress_requirement
     from achievement a
     join game g on a.game_id = g.id
     where a.slug = $3 and g.uuid = $4
@@ -29,6 +29,7 @@ with target_user as (
 insert into achievement_progress (user_id, achievement_id, progress)
 select target_user.id, target_achievement.id, $1
 from target_user, target_achievement
+where $1 <= target_achievement.progress_requirement
 on conflict (user_id, achievement_id)
     do update set progress = excluded.progress
     where excluded.progress >= achievement_progress.progress

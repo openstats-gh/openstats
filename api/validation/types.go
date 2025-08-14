@@ -8,8 +8,65 @@ import (
 	"github.com/dresswithpockets/openstats/app/rid"
 	"github.com/google/uuid"
 	"reflect"
+	"strconv"
 	"strings"
+	"time"
 )
+
+type EpochTime uint64
+
+var unixEpochSchema = &huma.Schema{
+	Type:        "string",
+	Title:       "Unix Epoch Time",
+	Description: "Unsigned 64-bit integer of the number of milliseconds since Junuary 1st, 1997 12:00 AM",
+	Format:      "unix-time",
+	Examples:    []any{"1755126366000"},
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (u EpochTime) Schema(r huma.Registry) *huma.Schema {
+	return unixEpochSchema
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (u *EpochTime) MarshalJSON() ([]byte, error) {
+	return json.Marshal(u.String())
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (u *EpochTime) MarshalText() ([]byte, error) {
+	return []byte(u.String()), nil
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (u *EpochTime) UnmarshalJSON(bytes []byte) error {
+	var text string
+	if err := json.Unmarshal(bytes, &text); err != nil {
+		return err
+	}
+
+	return u.UnmarshalText([]byte(text))
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (u *EpochTime) UnmarshalText(text []byte) (err error) {
+	*(*uint64)(u), err = strconv.ParseUint(string(text), 10, 64)
+	return
+}
+
+//goland:noinspection GoMixedReceiverTypes
+func (u EpochTime) String() string {
+	return strconv.FormatUint(uint64(u), 10)
+}
+
+func ParseEpochTime(s string) (epoch EpochTime, err error) {
+	err = epoch.UnmarshalText([]byte(s))
+	return
+}
+
+func ToEpochTime(t time.Time) EpochTime {
+	return EpochTime(t.UnixMilli())
+}
 
 type Optional[T any] struct {
 	Value    T

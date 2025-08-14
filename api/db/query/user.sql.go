@@ -477,6 +477,33 @@ func (q *Queries) GetUserUuid(ctx context.Context, slug string) (uuid.UUID, erro
 	return uuid, err
 }
 
+const getUserWithName = `-- name: GetUserWithName :one
+select u.uuid, u.created_at, u.slug, coalesce(uldn.display_name, '')
+from users u
+    left outer join user_latest_display_name uldn on u.id = uldn.user_id
+where u.uuid = $1
+limit 1
+`
+
+type GetUserWithNameRow struct {
+	Uuid        uuid.UUID
+	CreatedAt   time.Time
+	Slug        string
+	DisplayName string
+}
+
+func (q *Queries) GetUserWithName(ctx context.Context, userUuid uuid.UUID) (GetUserWithNameRow, error) {
+	row := q.db.QueryRow(ctx, getUserWithName, userUuid)
+	var i GetUserWithNameRow
+	err := row.Scan(
+		&i.Uuid,
+		&i.CreatedAt,
+		&i.Slug,
+		&i.DisplayName,
+	)
+	return i, err
+}
+
 const updateSessionProfile = `-- name: UpdateSessionProfile :exec
 with target_user as (
     select u1.id, u1.slug as old_slug, uldn.display_name as latest_display_name

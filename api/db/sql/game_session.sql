@@ -38,7 +38,7 @@ where u.uuid = @user_uuid and g.uuid = @game_uuid;
 with target_user as (
     select id from users where users.uuid = @user_uuid
 ), target_achievement as (
-    select a.id, a.slug
+    select a.id, a.slug, a.progress_requirement
     from achievement a
     join game g on a.game_id = g.id
     where a.slug = @achievement_slug and g.uuid = @game_uuid
@@ -46,6 +46,7 @@ with target_user as (
 insert into achievement_progress (user_id, achievement_id, progress)
 select target_user.id, target_achievement.id, @new_progress
 from target_user, target_achievement
+where @new_progress <= target_achievement.progress_requirement
 on conflict (user_id, achievement_id)
     do update set progress = excluded.progress
     where excluded.progress >= achievement_progress.progress

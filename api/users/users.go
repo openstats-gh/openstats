@@ -19,14 +19,14 @@ import (
 
 // User resource returned by users/ endpoints
 type User struct {
-	RID         rid.RID   `json:"rid" readOnly:"true"`
-	CreatedAt   time.Time `json:"createdAt" readOnly:"true"`
-	Slug        string    `json:"slug"`
-	DisplayName string    `json:"displayName,omitempty"`
-	BioText     string    `json:"bioText,omitempty"`
-	AvatarUrl   string    `json:"avatarUrl,omitempty" readOnly:"true"`
-	Email       string    `json:"email,omitempty"`
-	Password    string    `json:"password,omitempty" writeOnly:"true"`
+	RID         rid.RID              `json:"rid" readOnly:"true"`
+	CreatedAt   validation.EpochTime `json:"createdAt" readOnly:"true"`
+	Slug        string               `json:"slug"`
+	DisplayName string               `json:"displayName,omitempty"`
+	BioText     string               `json:"bioText,omitempty"`
+	AvatarUrl   string               `json:"avatarUrl,omitempty" readOnly:"true"`
+	Email       string               `json:"email,omitempty"`
+	Password    string               `json:"password,omitempty" writeOnly:"true"`
 }
 
 type UnlockedAchievementInfo struct {
@@ -78,10 +78,21 @@ func RegisterRoutes(api huma.API) {
 	}, HandleSearchUsers)
 
 	huma.Register(usersApi, huma.Operation{
+		Path:        "/{user}",
+		OperationID: "get-user",
+		Method:      http.MethodGet,
+		Security:    []map[string][]string{{"GameToken": {}}},
+		Middlewares: huma.Middlewares{auth.GameTokenAuthHandler, requireGameTokenAuthHandler},
+		Summary:     "Get user",
+		Description: "Get a user by RID, or get the user associated with the Game Token if @me is provided instead of an RID",
+	}, HandleGetUser)
+
+	huma.Register(usersApi, huma.Operation{
 		Path:        "/{user}/games/{game}/sessions",
 		OperationID: "users-create-game-session",
 		Method:      http.MethodPost,
 		Security:    []map[string][]string{{"GameToken": {}}},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized},
 		Middlewares: huma.Middlewares{auth.GameTokenAuthHandler, requireGameTokenAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Create a game session",
 		Description: "Create a new game session. Game Sessions are used to track playtime, stats, and achievements.",
@@ -188,18 +199,61 @@ func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchU
 	}, nil
 }
 
+type GetUserInput struct {
+	User string `path:"user"`
+}
+
+type GetUserOutput struct {
+	Body User
+}
+
+func HandleGetUser(ctx context.Context, input *GetUserInput) (*GetUserOutput, error) {
+	principal, hasPrincipal := auth.GetGameTokenPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("Game Token required to get users")
+	}
+
+	userUuid := principal.UserRid.ID
+	if input.User != "@me" {
+		userRid, ridErr := rid.ParseString(input.User)
+		if ridErr != nil {
+			return nil, ridErr
+		}
+
+		userUuid = userRid.ID
+	}
+
+	user, err := db.Queries.GetUserWithName(ctx, userUuid)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, huma.Error404NotFound("User not found")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetUserOutput{
+		Body: User{
+			RID:         rid.From(auth.UserRidPrefix, userUuid),
+			CreatedAt:   validation.ToEpochTime(user.CreatedAt),
+			Slug:        user.Slug,
+			DisplayName: user.DisplayName,
+		},
+	}, nil
+}
+
 type Game struct {
-	RID       rid.RID   `json:"rid" readOnly:"true"`
-	CreatedAt time.Time `json:"createdAt" readOnly:"true"`
-	Slug      string    `json:"slug"`
+	RID       rid.RID              `json:"rid" readOnly:"true"`
+	CreatedAt validation.EpochTime `json:"createdAt" readOnly:"true"`
+	Slug      string               `json:"slug"`
 }
 
 type GameSession struct {
-	RID            rid.RID   `json:"rid" readOnly:"true"`
-	LastPulse      time.Time `json:"lastPulse" readOnly:"true"`
-	NextPulseAfter int       `json:"nextPulseAfter" readOnly:"true" doc:"the number of minutes before your next heartbeat. Always send your next heartbeat as close to this amount of time after the response is received, otherwise the API cannot guarantee that the JWT will continue to be valid for the next heartbeat."`
-	User           User      `json:"user" readOnly:"true"`
-	Game           Game      `json:"game" readOnly:"true"`
+	RID            rid.RID              `json:"rid" readOnly:"true"`
+	LastPulse      validation.EpochTime `json:"lastPulse" readOnly:"true"`
+	NextPulseAfter int                  `json:"nextPulseAfter" readOnly:"true" doc:"the number of seconds before your next heartbeat. Always send your next heartbeat close to this amount of time after the response is received, otherwise the API cannot guarantee that the JWT will continue to be valid for the next heartbeat."`
+	User           User                 `json:"user" readOnly:"true"`
+	Game           Game                 `json:"game" readOnly:"true"`
 }
 
 type CreateGameSessionInput struct {
@@ -237,23 +291,24 @@ func HandleCreateGameSession(ctx context.Context, input *CreateGameSessionInput)
 		return nil, gameErr
 	}
 
-	pulseJitter := rand.Intn(10) - 5
-	nextPulseDuration := 10 + pulseJitter
+	// we jitter 360 +/- 180 seconds
+	pulseJitter := rand.Intn(360) - 180
+	nextPulseDuration := 360 + pulseJitter
 
 	return &CreateGameSessionOutput{
 		Token: signedToken,
 		Body: GameSession{
 			RID:            rid.From(auth.GameSessionRidPrefix, gameSession.Uuid),
-			LastPulse:      gameSession.LastPulseAt,
+			LastPulse:      validation.ToEpochTime(gameSession.LastPulseAt),
 			NextPulseAfter: nextPulseDuration,
 			User: User{
 				RID:       rid.From(auth.UserRidPrefix, user.Uuid),
-				CreatedAt: user.CreatedAt,
+				CreatedAt: validation.ToEpochTime(user.CreatedAt),
 				Slug:      user.Slug,
 			},
 			Game: Game{
 				RID:       rid.From(auth.GameRidPrefix, game.Uuid),
-				CreatedAt: game.CreatedAt,
+				CreatedAt: validation.ToEpochTime(game.CreatedAt),
 				Slug:      game.Slug,
 			},
 		},
@@ -277,12 +332,14 @@ func HandleHeartbeatGameSession(ctx context.Context, input *HeartbeatGameSession
 		return nil, huma.Error401Unauthorized("heartbeats must be authenticated using a Game Session Token")
 	}
 
-	pulseJitter := rand.Intn(10) - 5
-	nextPulseDuration := 10 + pulseJitter
+	// we jitter 360 +/- 180 seconds
+	pulseJitter := rand.Intn(360) - 180
+	nextPulseDuration := 360 + pulseJitter
+
 	// we subtract 1 minute from the nextPulseDirection when getting the nextPulseTime as additional jitter for this
 	// request. We really don't want the caller to have an expired token by the time this request makes its way to us -
 	// otherwise they'd have to create a new game session!
-	nextPulseTime := time.Now().UTC().Add(time.Duration(nextPulseDuration-1) * time.Minute)
+	nextPulseTime := time.Now().UTC().Add(time.Duration(nextPulseDuration-60) * time.Second)
 
 	var resultToken *string
 	lastPulseAt := principal.LastPulse
@@ -318,16 +375,16 @@ func HandleHeartbeatGameSession(ctx context.Context, input *HeartbeatGameSession
 		Token: resultToken,
 		Body: GameSession{
 			RID:            gameSessionRid,
-			LastPulse:      lastPulseAt,
+			LastPulse:      validation.ToEpochTime(lastPulseAt),
 			NextPulseAfter: nextPulseDuration,
 			User: User{
 				RID:       principal.UserRid,
-				CreatedAt: user.CreatedAt,
+				CreatedAt: validation.ToEpochTime(user.CreatedAt),
 				Slug:      user.Slug,
 			},
 			Game: Game{
 				RID:       principal.GameRid,
-				CreatedAt: game.CreatedAt,
+				CreatedAt: validation.ToEpochTime(game.CreatedAt),
 				Slug:      game.Slug,
 			},
 		},
@@ -371,7 +428,7 @@ func HandleGetUserAchievements(ctx context.Context, input *GetUserAchievementsRe
 		return nil, dbErr
 	}
 
-	var resultMap map[string]int32
+	resultMap := map[string]int32{}
 	for _, progressRow := range progressRows {
 		resultMap[progressRow.Slug] = progressRow.Progress
 	}
