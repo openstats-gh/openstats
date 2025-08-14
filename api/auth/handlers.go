@@ -157,19 +157,13 @@ func GameTokenAuthHandler(ctx huma.Context, next func(huma.Context)) {
 		return
 	}
 
-	uuidBytes, decodeErr := rid.Base62Encoding.Decode(tokenString)
+	tokenRid, decodeErr := rid.ParseString(tokenString)
 	if decodeErr != nil {
 		next(ctx)
 		return
 	}
 
-	tokenUuid := uuid.UUID(uuidBytes)
-	if tokenUuid == uuid.Nil {
-		next(ctx)
-		return
-	}
-
-	tokenInfo, findErr := db.Queries.FindTokenWithUser(ctx.Context(), tokenUuid)
+	tokenInfo, findErr := db.Queries.FindTokenWithUser(ctx.Context(), tokenRid.ID)
 	if findErr != nil {
 		next(ctx)
 		return
@@ -177,7 +171,7 @@ func GameTokenAuthHandler(ctx huma.Context, next func(huma.Context)) {
 
 	// TODO: differentiate between a User Identity/Principal and a GameToken Identity/Principal
 	ctx = huma.WithValue(ctx, PrincipalContextKey, &GameTokenPrincipal{
-		TokenUuid: tokenUuid,
+		TokenUuid: tokenRid.ID,
 		UserRid:   rid.From(UserRidPrefix, tokenInfo.UserUuid),
 		GameRid:   rid.From(GameRidPrefix, tokenInfo.GameUuid),
 	})
