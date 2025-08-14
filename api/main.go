@@ -10,9 +10,12 @@ import (
 	"github.com/dresswithpockets/openstats/app/users"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/httplog/v3"
 	"github.com/rs/cors"
 	"log"
+	"log/slog"
 	"net/http"
+	"os"
 )
 
 func main() {
@@ -24,11 +27,45 @@ func main() {
 		log.Fatal(err)
 	}
 
+	logFormat := httplog.SchemaECS.Concise(true)
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		ReplaceAttr: logFormat.ReplaceAttr,
+	}))
+
 	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
 	// other admins
 	auth.AddRootAdminUser(context.Background())
 
 	router := chi.NewMux()
+
+	// Request logger
+	router.Use(httplog.RequestLogger(logger, &httplog.Options{
+		// Level defines the verbosity of the request logs:
+		// slog.LevelDebug - log all responses (incl. OPTIONS)
+		// slog.LevelInfo  - log responses (excl. OPTIONS)
+		// slog.LevelWarn  - log 4xx and 5xx responses only (except for 429)
+		// slog.LevelError - log 5xx responses only
+		Level: slog.LevelDebug,
+
+		// Set log output to Elastic Common Schema (ECS) format.
+		Schema: httplog.SchemaECS,
+
+		// RecoverPanics recovers from panics occurring in the underlying HTTP handlers
+		// and middlewares. It returns HTTP 500 unless response status was already set.
+		//
+		// NOTE: Panics are logged as errors automatically, regardless of this setting.
+		RecoverPanics: true,
+
+		// Optionally, log selected request/response headers explicitly.
+		LogRequestHeaders:  []string{"Origin"},
+		LogResponseHeaders: []string{},
+
+		// Optionally, enable logging of request/response body based on custom conditions.
+		// Useful for debugging payload issues in development.
+		LogRequestBody:  func(r *http.Request) bool { return true },
+		LogResponseBody: func(r *http.Request) bool { return true },
+	}))
+
 	router.Use(cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: true,

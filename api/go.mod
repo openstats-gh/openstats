@@ -9,6 +9,7 @@ require (
 	github.com/danielgtaylor/huma/v2 v2.34.1
 	github.com/eknkc/basex v1.0.1
 	github.com/go-chi/chi/v5 v5.2.2
+	github.com/go-chi/httplog/v3 v3.2.2
 	github.com/go-playground/validator/v10 v10.27.0
 	github.com/gofiber/fiber/v2 v2.52.8
 	github.com/gofiber/storage/postgres/v3 v3.2.0
