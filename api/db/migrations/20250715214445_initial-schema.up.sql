@@ -133,6 +133,15 @@ create or replace trigger user_password_moddatetime
     for each row
 execute function moddatetime(updated_at);
 
+create table if not exists user_avatar
+(
+    id         serial primary key,
+    created_at timestamptz not null default now(),
+    uuid       uuid        not null unique default gen_uuid_v7(),
+    blurhash   text not null,
+    user_id    integer not null references users
+);
+
 create table if not exists developer
 (
     id         serial primary key,
@@ -171,6 +180,15 @@ create table if not exists developer_display_name
     display_name text        not null
 );
 
+create table if not exists developer_avatar
+(
+    id           serial primary key,
+    created_at   timestamptz not null default now(),
+    uuid         uuid        not null unique default gen_uuid_v7(),
+    blurhash     text not null,
+    developer_id integer not null references developer
+);
+
 create table if not exists game
 (
     id           serial primary key,
@@ -188,6 +206,15 @@ create or replace trigger game_moddatetime
     for each row
 execute function moddatetime(updated_at);
 
+create table if not exists game_avatar
+(
+    id         serial primary key,
+    created_at timestamptz not null default now(),
+    uuid       uuid        not null unique default gen_uuid_v7(),
+    blurhash   text not null,
+    game_id    integer not null references game
+);
+
 create table if not exists achievement
 (
     id                   serial primary key,
@@ -198,6 +225,15 @@ create table if not exists achievement
     name                 text        not null,
     description          text        not null,
     progress_requirement integer     not null
+);
+
+create table if not exists achievement_avatar
+(
+    id             serial primary key,
+    created_at     timestamptz not null default now(),
+    uuid           uuid        not null unique default gen_uuid_v7(),
+    blurhash       text not null,
+    achievement_id integer not null references achievement
 );
 
 create table if not exists achievement_progress
@@ -275,3 +311,4 @@ create table if not exists game_session
     -- last time a pulse was received by the game
     last_pulse_at timestamptz not null default now()
 );
+
