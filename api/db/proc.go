@@ -176,3 +176,22 @@ func (a *Actions) CreateGameSessionAndToken(
 
 	return
 }
+
+func (a *Actions) Transact(ctx context.Context, do func(context.Context, *query.Queries) error) (err error) {
+	var tx pgx.Tx
+	tx, err = a.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return
+	}
+
+	qtx := a.queries.WithTx(tx)
+	if err = do(ctx, qtx); err != nil {
+		return tx.Rollback(ctx)
+	}
+
+	if err = tx.Commit(ctx); err != nil {
+		return tx.Rollback(ctx)
+	}
+
+	return nil
+}
