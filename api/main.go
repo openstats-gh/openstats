@@ -7,6 +7,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/internal"
+	"github.com/dresswithpockets/openstats/app/media"
 	"github.com/dresswithpockets/openstats/app/users"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/go-chi/chi/v5"
@@ -122,6 +123,9 @@ func main() {
 	}, func(ctx context.Context, _ *struct{}) (*ReadyResponse, error) {
 		return &ReadyResponse{OK: true}, nil
 	})
+
+	// TODO: setup remote media when not local
+	media.SetupLocal(api)
 
 	users.RegisterRoutes(api)
 	internal.RegisterRoutes(api)
