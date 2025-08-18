@@ -440,18 +440,27 @@ func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRece
 }
 
 const getUserSessionProfile = `-- name: GetUserSessionProfile :one
-select u.uuid, u.slug, coalesce(uldn.display_name, ''), u.created_at
+select
+    u.uuid,
+    u.slug,
+    coalesce(uldn.display_name, ''),
+    u.created_at,
+    ua.uuid as avatar_uuid,
+    ua.blurhash as avatar_blurhash
 from users u
      left outer join user_latest_display_name uldn on u.id = uldn.user_id
+     left outer join user_avatar ua on u.id = ua.user_id
 where u.uuid = $1
 limit 1
 `
 
 type GetUserSessionProfileRow struct {
-	Uuid        uuid.UUID
-	Slug        string
-	DisplayName string
-	CreatedAt   time.Time
+	Uuid           uuid.UUID
+	Slug           string
+	DisplayName    string
+	CreatedAt      time.Time
+	AvatarUuid     uuid.NullUUID
+	AvatarBlurhash *string
 }
 
 func (q *Queries) GetUserSessionProfile(ctx context.Context, userUuid uuid.UUID) (GetUserSessionProfileRow, error) {
@@ -462,6 +471,8 @@ func (q *Queries) GetUserSessionProfile(ctx context.Context, userUuid uuid.UUID)
 		&i.Slug,
 		&i.DisplayName,
 		&i.CreatedAt,
+		&i.AvatarUuid,
+		&i.AvatarBlurhash,
 	)
 	return i, err
 }

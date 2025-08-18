@@ -22,6 +22,14 @@ type Achievement struct {
 	ProgressRequirement int32
 }
 
+type AchievementAvatar struct {
+	ID            int32
+	CreatedAt     time.Time
+	Uuid          uuid.UUID
+	Blurhash      string
+	AchievementID int32
+}
+
 type AchievementProgress struct {
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
@@ -44,6 +52,14 @@ type Developer struct {
 	UpdatedAt time.Time
 	Uuid      uuid.UUID
 	Slug      string
+}
+
+type DeveloperAvatar struct {
+	ID          int32
+	CreatedAt   time.Time
+	Uuid        uuid.UUID
+	Blurhash    string
+	DeveloperID int32
 }
 
 type DeveloperDisplayName struct {
@@ -74,6 +90,14 @@ type Game struct {
 	DeveloperID int32
 	Uuid        uuid.UUID
 	Slug        string
+}
+
+type GameAvatar struct {
+	ID        int32
+	CreatedAt time.Time
+	Uuid      uuid.UUID
+	Blurhash  string
+	GameID    int32
 }
 
 type GameSession struct {
@@ -118,6 +142,14 @@ type User struct {
 	UpdatedAt time.Time
 	Uuid      uuid.UUID
 	Slug      string
+}
+
+type UserAvatar struct {
+	ID        int32
+	CreatedAt time.Time
+	Uuid      uuid.UUID
+	Blurhash  string
+	UserID    int32
 }
 
 type UserDisplayName struct {

@@ -1,17 +1,22 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/buckket/go-blurhash"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
+	"github.com/dresswithpockets/openstats/app/media"
 	"github.com/dresswithpockets/openstats/app/rid"
+	"github.com/dresswithpockets/openstats/app/users"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/google/uuid"
 	"github.com/rotisserie/eris"
+	"image/png"
 	"log"
 	"net/http"
 	"time"
@@ -35,7 +40,7 @@ func RegisterRoutes(api huma.API) {
 	})
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/sign-up",
-		OperationID: "internal-a-sign-up",
+		OperationID: "sign-up",
 		Method:      http.MethodPost,
 		Errors: []int{
 			http.StatusUnauthorized,
@@ -48,7 +53,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/sign-in",
-		OperationID: "internal-b-sign-in",
+		OperationID: "sign-in",
 		Method:      http.MethodPost,
 		Errors:      []int{http.StatusUnauthorized},
 		Metadata:    map[string]any{"NoUserAuth": true},
@@ -58,7 +63,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/sign-out",
-		OperationID: "internal-c-sign-out",
+		OperationID: "sign-out",
 		Method:      http.MethodPost,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Sign out",
@@ -67,7 +72,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/",
-		OperationID: "internal-d-get-session",
+		OperationID: "get-session",
 		Method:      http.MethodGet,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get session summary",
@@ -76,7 +81,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/profile",
-		OperationID: "internal-e-get-session-profile",
+		OperationID: "get-session-profile",
 		Method:      http.MethodGet,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get user's profile",
@@ -85,7 +90,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/profile",
-		OperationID: "internal-f-update-session-profile",
+		OperationID: "update-session-profile",
 		Method:      http.MethodPost,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Update user's profile",
@@ -93,8 +98,17 @@ func RegisterRoutes(api huma.API) {
 	}, HandlePostSessionProfile)
 
 	huma.Register(sessionApi, huma.Operation{
+		Path:        "/profile/avatar",
+		OperationID: "update-session-avatar",
+		Method:      http.MethodPost,
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler},
+		Summary:     "Update user's avatar",
+		Description: "Update avatar of current authenticated user",
+	}, HandlePostSessionAvatar)
+
+	huma.Register(sessionApi, huma.Operation{
 		Path:        "/tokens",
-		OperationID: "internal-f-get-tokens",
+		OperationID: "get-game-tokens",
 		Method:      http.MethodGet,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get user's tokens",
@@ -103,7 +117,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/tokens",
-		OperationID: "internal-g-create-token",
+		OperationID: "create-game-token",
 		Method:      http.MethodPost,
 		Errors:      []int{http.StatusBadRequest},
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
@@ -113,7 +127,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/tokens/{tokenRID}",
-		OperationID: "internal-h-delete-token",
+		OperationID: "delete-game-token",
 		Method:      http.MethodDelete,
 		Errors:      []int{http.StatusBadRequest},
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
@@ -121,13 +135,13 @@ func RegisterRoutes(api huma.API) {
 		Description: "Invalidate one of the current user's tokens",
 	}, HandleDeleteSessionGameToken)
 
-	userApi := huma.NewGroup(internalApi, "/users")
+	userApi := huma.NewGroup(internalApi, "/users/v1")
 	userApi.UseSimpleModifier(func(op *huma.Operation) {
 		op.Tags = append(op.Tags, "Internal/Users")
 	})
 	huma.Register(userApi, huma.Operation{
-		Path:        "/users",
-		OperationID: "internal-i-search-users",
+		Path:        "/",
+		OperationID: "search-users",
 		Method:      http.MethodGet,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Search users",
@@ -135,8 +149,8 @@ func RegisterRoutes(api huma.API) {
 	}, HandleSearchUsers)
 
 	huma.Register(userApi, huma.Operation{
-		Path:        "/users/{user}/profile",
-		OperationID: "internal-h-get-user-profile",
+		Path:        "/{user}/profile",
+		OperationID: "get-user-profile",
 		Method:      http.MethodGet,
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get a user's profile",
@@ -145,12 +159,12 @@ func RegisterRoutes(api huma.API) {
 }
 
 type InternalUser struct {
-	RID         rid.RID   `json:"rid" readOnly:"true"`
-	CreatedAt   time.Time `json:"createdAt" readOnly:"true"`
-	Slug        *string   `json:"slug,omitempty"`
-	DisplayName *string   `json:"displayName,omitempty"`
-	BioText     *string   `json:"bioText,omitempty"`
-	AvatarUrl   string    `json:"avatarUrl,omitempty" readOnly:"true"`
+	RID         rid.RID       `json:"rid" readOnly:"true"`
+	CreatedAt   time.Time     `json:"createdAt" readOnly:"true"`
+	Slug        *string       `json:"slug,omitempty"`
+	DisplayName *string       `json:"displayName,omitempty"`
+	BioText     *string       `json:"bioText,omitempty"`
+	Avatar      *users.Avatar `json:"avatar,omitempty" readOnly:"true"`
 }
 
 type ProfileUnlockedAchievements struct {
@@ -241,6 +255,14 @@ func GetUserProfile(ctx context.Context, userUuid uuid.UUID) (UserProfile, error
 		otherUserUnlocks[unlockIdx].MapFromRow(recentOtherUserAchievements[unlockIdx])
 	}
 
+	var avatar *users.Avatar
+	if sessionProfile.AvatarBlurhash != nil && sessionProfile.AvatarUuid.Valid {
+		avatar = &users.Avatar{
+			Url:      media.GetAvatarUrl("users", sessionProfile.AvatarUuid.UUID),
+			Blurhash: *sessionProfile.AvatarBlurhash,
+		}
+	}
+
 	return UserProfile{
 		User: InternalUser{
 			RID: rid.RID{
@@ -250,6 +272,7 @@ func GetUserProfile(ctx context.Context, userUuid uuid.UUID) (UserProfile, error
 			CreatedAt:   sessionProfile.CreatedAt,
 			Slug:        &sessionProfile.Slug,
 			DisplayName: &sessionProfile.DisplayName,
+			Avatar:      avatar,
 		},
 		UnlockedAchievements:  unlocks,
 		OtherUserAchievements: otherUserUnlocks,
@@ -306,6 +329,52 @@ func HandlePostSessionProfile(ctx context.Context, input *PostSessionRequest) (*
 	}
 
 	return nil, nil
+}
+
+type PostAvatarInput struct {
+	Body []byte
+}
+
+type PostAvatarOutput struct {
+	Location string `header:"Location"`
+}
+
+func HandlePostSessionAvatar(ctx context.Context, input *PostAvatarInput) (*PostAvatarOutput, error) {
+	principal, hasPrincipal := auth.GetPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("no session")
+	}
+
+	decodedPng, pngErr := png.Decode(bytes.NewBuffer(input.Body))
+	if pngErr != nil {
+		return nil, pngErr
+	}
+
+	blur, blurErr := blurhash.Encode(4, 4, decodedPng)
+	if blurErr != nil {
+		return nil, blurErr
+	}
+
+	var newAvatar query.UserAvatar
+	transactErr := db.DB.Transact(ctx, func(c context.Context, queries *query.Queries) (err error) {
+		newAvatar, err = db.Queries.AddUserAvatar(ctx, query.AddUserAvatarParams{
+			Blurhash: blur,
+			UserUuid: principal.User.Uuid,
+		})
+		if err != nil {
+			return err
+		}
+
+		return media.WriteAvatar(input.Body, "users", newAvatar.Uuid)
+	})
+
+	if transactErr != nil {
+		return nil, transactErr
+	}
+
+	return &PostAvatarOutput{
+		Location: media.GetAvatarUrl("users", newAvatar.Uuid),
+	}, nil
 }
 
 const GameRidPrefix = "g"
@@ -486,10 +555,11 @@ func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchU
 	}
 
 	builder := db.DB.Builder().
-		Select("u.uuid", "u.created_at", "u.slug", "coalesce(uldn.display_name, '')").
+		Select("u.uuid", "u.created_at", "u.slug", "coalesce(uldn.display_name, ''), ua.uuid as avatar_uuid, ua.blurhash as avatar_blurhash").
 		From("users u").
 		JoinClause("left outer join user_latest_display_name uldn on u.id = uldn.user_id").
 		JoinClause("left outer join user_latest_email ule on u.id = ule.user_id and (? or (? and u.uuid = ?))", isAdmin, hasPrincipal, principalUuid).
+		JoinClause("left outer join user_avatar ua on u.id = ua.user_id").
 		Where("u.slug like ?", "%"+input.SlugLike+"%").
 		OrderBy("u.uuid desc")
 
@@ -512,17 +582,28 @@ func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchU
 		var userUuid uuid.UUID
 		var item InternalUser
 
+		var avatarUuid uuid.NullUUID
+		var avatarBlurhash *string
+
 		if scanErr := rows.Scan(
 			&userUuid,
 			&item.CreatedAt,
 			&item.Slug,
 			&item.DisplayName,
-			// TODO: BioText, AvatarUrl
+			&avatarUuid,
+			&avatarBlurhash,
+			// TODO: BioText
 		); scanErr != nil {
 			return nil, eris.Wrap(scanErr, "")
 		}
 
 		item.RID = rid.From(auth.UserRidPrefix, userUuid)
+		if avatarUuid.Valid && avatarBlurhash != nil {
+			item.Avatar = &users.Avatar{
+				Url:      media.GetAvatarUrl("users", avatarUuid.UUID),
+				Blurhash: *avatarBlurhash,
+			}
+		}
 		items = append(items, item)
 	}
 

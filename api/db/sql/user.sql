@@ -11,9 +11,16 @@ select * from users where slug = $1 limit 1;
 select uuid from users where slug = $1 limit 1;
 
 -- name: GetUserSessionProfile :one
-select u.uuid, u.slug, coalesce(uldn.display_name, ''), u.created_at
+select
+    u.uuid,
+    u.slug,
+    coalesce(uldn.display_name, ''),
+    u.created_at,
+    ua.uuid as avatar_uuid,
+    ua.blurhash as avatar_blurhash
 from users u
      left outer join user_latest_display_name uldn on u.id = uldn.user_id
+     left outer join user_avatar ua on u.id = ua.user_id
 where u.uuid = @user_uuid
 limit 1;
 

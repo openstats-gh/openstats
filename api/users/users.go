@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+type Avatar struct {
+	Url      string `json:"url" readOnly:"true"`
+	Blurhash string `json:"blurhash" readOnly:"true"`
+}
+
 // User resource returned by users/ endpoints
 type User struct {
 	RID         rid.RID              `json:"rid" readOnly:"true"`
@@ -24,7 +29,7 @@ type User struct {
 	Slug        string               `json:"slug"`
 	DisplayName string               `json:"displayName,omitempty"`
 	BioText     string               `json:"bioText,omitempty"`
-	AvatarUrl   string               `json:"avatarUrl,omitempty" readOnly:"true"`
+	Avatar      *Avatar              `json:"avatar,omitempty" readOnly:"true"`
 	Email       string               `json:"email,omitempty"`
 	Password    string               `json:"password,omitempty" writeOnly:"true"`
 }
@@ -69,7 +74,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(usersApi, huma.Operation{
 		Path:        "/",
-		OperationID: "internal-i-users-get",
+		OperationID: "users-search",
 		Method:      http.MethodGet,
 		Security:    []map[string][]string{{"GameToken": {}}},
 		Middlewares: huma.Middlewares{auth.GameTokenAuthHandler, requireGameTokenAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
@@ -79,7 +84,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(usersApi, huma.Operation{
 		Path:        "/{user}",
-		OperationID: "get-user",
+		OperationID: "users-get",
 		Method:      http.MethodGet,
 		Security:    []map[string][]string{{"GameToken": {}}},
 		Middlewares: huma.Middlewares{auth.GameTokenAuthHandler, requireGameTokenAuthHandler},
@@ -110,7 +115,7 @@ func RegisterRoutes(api huma.API) {
 
 	huma.Register(usersApi, huma.Operation{
 		Path:        "/{user}/games/{game}/achievements",
-		OperationID: "internal-j-users-get-achievements",
+		OperationID: "users-get-achievements",
 		Method:      http.MethodGet,
 		Security:    []map[string][]string{{"GameSession": {}}},
 		Middlewares: huma.Middlewares{auth.GameSessionAuthHandler, requireGameSessionAuthHandler},
