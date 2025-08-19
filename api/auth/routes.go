@@ -110,6 +110,10 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 		return nil, huma.Error401Unauthorized("already signed in")
 	}
 
+	if registerBody.Body.Email != "" {
+		// TODO: use SMTP email verification
+	}
+
 	newUser, newUserError := AddNewUser(
 		ctx,
 		registerBody.Body.DisplayName,
@@ -131,6 +135,8 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 
 		return nil, newUserError
 	}
+
+	// TODO: send email confirmation
 
 	signedJwt, token, createErr := CreateSessionToken(ctx, newUser.Uuid)
 	if createErr != nil {
