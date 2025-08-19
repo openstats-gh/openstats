@@ -3,7 +3,7 @@ import {api} from "$lib/api";
 import {goto} from "$app/navigation";
 
 export const load: PageLoad = async ({ fetch }) => {
-    const session = await api.with(fetch).getCurrentSession()
+    const session = await api.with(fetch).getSessionSummary()
 
     if (session !== null) {
         // redirect(307, "/")
@@ -26,9 +26,9 @@ export const load: PageLoad = async ({ fetch }) => {
             return
         }
 
-        if (!await api.with(fetch).signIn(slug.toString(), password.toString())) {
-            // TODO: there was an error...
-        }
+        // if (!await api.with(fetch).signIn(slug.toString(), password.toString())) {
+        //     // TODO: there was an error...
+        // }
 
         await goto("/")
     }

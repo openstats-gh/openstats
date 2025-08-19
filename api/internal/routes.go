@@ -5,6 +5,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"image/png"
+	"log"
+	"net/http"
+	"time"
+
 	"github.com/buckket/go-blurhash"
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/dresswithpockets/openstats/app/auth"
@@ -16,10 +21,6 @@ import (
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/google/uuid"
 	"github.com/rotisserie/eris"
-	"image/png"
-	"log"
-	"net/http"
-	"time"
 )
 
 func RegisterRoutes(api huma.API) {
@@ -74,6 +75,7 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/",
 		OperationID: "get-session",
 		Method:      http.MethodGet,
+		Errors:      []int{http.StatusUnauthorized},
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get session summary",
 		Description: "Get details about the current authenticated session and the associated user",
