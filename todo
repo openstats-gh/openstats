@@ -1,29 +1,10 @@
-TODO add admin dashboard to view users, developers, games, achievements, and achievement progress
-TODO add display names and descriptions to developers
-TODO add display names and descriptions to games
-TODO add audit log for all operations, should show who/what/how
-TODO add admin dashboard tool to create new users
-TODO add admin dashboard tool to create new developers
-TODO add admin dashboard tool to create new games
-TODO add admin dashboard tool to create new achievements
-TODO add admin dashboard tool to update a user's slug, display name, and email
-TODO add admin dashboard tool to update a user's achievement progress
-TODO add admin dashboard tool to update a developer's slug, display name, and description
-TODO add admin dashboard tool to update a game's slug, display name, and description
-TODO add admin dashboard tool to update an achievements's slug, display name, description, and progress requirement
-TODO add admin dashboard tool to delete a user
-TODO add admin dashboard tool to delete a developer
-TODO add admin dashboard tool to delete a game
-TODO add admin dashboard tool to delete an achievement
-TODO add admin dashboard tool to delete a user's achievement progress
-TODO add admin dashboard tool to delete a user's email
+TODO add forgot-slug endpoint (without session)
+TODO add forgot-password endpoint (without session)
 
-TODO add email confirmations
-TODO add password resetting, which require a confirmed email
-TODO add admin dashboard tool to reset a user's password
+TODO add email-confirmation endpoint (requires session) - they will be required to log in via the frontend, and then the code will be forwarded to the endpoint
+TODO add change email endpoint (requires session)
+TODO add resend-email-confirmation endpoint (requires session)
+TODO add password reset endpoint (requires session)
 
-TODO add stats submission API - authenticated via a "Stats Token" - to submit achievement progress
-TODO add user tool to list, create, revoke Stats Tokens
-TODO create example godot SDK that interfaces with the openstats stats submission API
-TODO create generic native/C SDK that interfaces with the openstats stats submission API
+TODO create generic C-ABI-compatible SDK that interfaces with the openstats stats submission API
 TODO fork goldberg to integrate the C SDK
