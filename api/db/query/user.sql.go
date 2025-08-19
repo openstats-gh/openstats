@@ -333,7 +333,7 @@ func (q *Queries) GetUserDisplayNames(ctx context.Context, userID int32) ([]User
 }
 
 const getUserEmails = `-- name: GetUserEmails :many
-select id, created_at, updated_at, user_id, email, confirmed_at
+select id, created_at, user_id, email
 from user_email
 where user_id = $1
 `
@@ -350,10 +350,8 @@ func (q *Queries) GetUserEmails(ctx context.Context, userID int32) ([]UserEmail,
 		if err := rows.Scan(
 			&i.ID,
 			&i.CreatedAt,
-			&i.UpdatedAt,
 			&i.UserID,
 			&i.Email,
-			&i.ConfirmedAt,
 		); err != nil {
 			return nil, err
 		}

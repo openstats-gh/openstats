@@ -7,27 +7,26 @@ package query
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const findAchievementBySlug = `-- name: FindAchievementBySlug :one
 select a.id, a.created_at, a.updated_at, a.game_id, a.slug, a.name, a.description, a.progress_requirement
 from achievement a
      join game g on a.game_id = g.id
-     join developer d on g.developer_id = d.id
 where a.slug = $1
-  and d.slug = $2
-  and g.slug = $3
+  and g.uuid = $2
 limit 1
 `
 
 type FindAchievementBySlugParams struct {
-	AchSlug  string
-	DevSlug  string
-	GameSlug string
+	AchievementSlug string
+	GameUuid        uuid.UUID
 }
 
 func (q *Queries) FindAchievementBySlug(ctx context.Context, arg FindAchievementBySlugParams) (Achievement, error) {
-	row := q.db.QueryRow(ctx, findAchievementBySlug, arg.AchSlug, arg.DevSlug, arg.GameSlug)
+	row := q.db.QueryRow(ctx, findAchievementBySlug, arg.AchievementSlug, arg.GameUuid)
 	var i Achievement
 	err := row.Scan(
 		&i.ID,
