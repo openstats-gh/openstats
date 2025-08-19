@@ -2,10 +2,8 @@
 select a.*
 from achievement a
      join game g on a.game_id = g.id
-     join developer d on g.developer_id = d.id
-where a.slug = @ach_slug
-  and d.slug = @dev_slug
-  and g.slug = @game_slug
+where a.slug = @achievement_slug
+  and g.uuid = @game_uuid
 limit 1;
 
 -- name: UpsertAchievement :one
