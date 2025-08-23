@@ -5,7 +5,6 @@ import (
 	"errors"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
-	"github.com/gofiber/fiber/v2/log"
 )
 
 const (
@@ -15,13 +14,15 @@ const (
 	RootUserPass        = "openstatsadmin"
 )
 
-func AddRootAdminUser(ctx context.Context) {
+func AddRootAdminUser(ctx context.Context) error {
 	_, newUserErr := AddNewUser(ctx, RootUserDisplayName, RootUserEmail, RootUserSlug, RootUserPass)
 	// this function is expected to be idempotent - if called multiple times, it shouldn't fail even if the admin
 	// already exists
 	if newUserErr != nil && !errors.Is(newUserErr, db.ErrSlugAlreadyInUse) {
-		log.Fatal(newUserErr)
+		return newUserErr
 	}
+
+	return nil
 }
 
 func IsAdmin(user query.User) bool {
