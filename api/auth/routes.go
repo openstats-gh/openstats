@@ -8,6 +8,7 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
+	"github.com/dresswithpockets/openstats/app/env"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/rotisserie/eris"
@@ -60,7 +61,7 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInRes
 			Value:    signedJwt,
 			MaxAge:   int(token.ExpiresAt.Sub(time.Now().UTC()).Seconds()),
 			Expires:  token.ExpiresAt,
-			Secure:   false, // TODO: enable Secure in non-local environment
+			Secure:   env.GetBool("OPENSTATS_SESSION_COOKIE_SECURE"),
 			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
@@ -150,7 +151,7 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 			Value:    signedJwt,
 			MaxAge:   int(token.ExpiresAt.Sub(time.Now().UTC()).Seconds()),
 			Expires:  token.ExpiresAt,
-			Secure:   false, // TODO: enable Secure in non-local environment
+			Secure:   env.GetBool("OPENSTATS_SESSION_COOKIE_SECURE"),
 			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
@@ -176,7 +177,7 @@ func HandlePostSignOut(ctx context.Context, input *struct{}) (*SignOutResponse, 
 			Value:    "",
 			MaxAge:   0,
 			Expires:  time.Now(),
-			Secure:   false, // TODO: enable Secure in non-local environment
+			Secure:   env.GetBool("OPENSTATS_SESSION_COOKIE_SECURE"),
 			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
