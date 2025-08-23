@@ -8,3 +8,5 @@ TODO add password reset endpoint (requires session)
 
 TODO create generic C-ABI-compatible SDK that interfaces with the openstats stats submission API
 TODO fork goldberg to integrate the C SDK
+
+TODO add account/data deletion
