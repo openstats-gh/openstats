@@ -9,6 +9,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/env"
+	"github.com/dresswithpockets/openstats/app/mail"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/rotisserie/eris"
@@ -111,10 +112,6 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 		return nil, huma.Error401Unauthorized("already signed in")
 	}
 
-	if registerBody.Body.Email != "" {
-		// TODO: use SMTP email verification
-	}
-
 	newUser, newUserError := AddNewUser(
 		ctx,
 		registerBody.Body.DisplayName,
@@ -137,7 +134,20 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 		return nil, newUserError
 	}
 
-	// TODO: send email confirmation
+	// TODO: we should handle this by sending an email confirmation request to a channel thats being processed in a
+	//       goroutine.
+	if len(registerBody.Body.Email) > 0 {
+		// TODO: create the confirmation code and send it in the email
+		sendErr := mail.Default.Send(ctx, mail.Mail{
+			From:    "noreply@openstats.me",
+			To:      registerBody.Body.Email,
+			Subject: "Openstats Confirmation",
+			Body:    "",
+		})
+		if sendErr != nil {
+			// TODO: failures should be logged
+		}
+	}
 
 	signedJwt, token, createErr := CreateSessionToken(ctx, newUser.Uuid)
 	if createErr != nil {
