@@ -27,7 +27,7 @@ func setupRouter() (*chi.Mux, error) {
 	logConcise := env.GetBool("OPENSTATS_HTTPLOG_CONCISE")
 	logFormat := httplog.SchemaECS.Concise(logConcise)
 
-	logLevel, matchedErr := env.GetMatched("OPENSTATS_HTTPLOG_LEVEL", log.SlogLevelMap)
+	logLevel, matchedErr := env.GetMapped("OPENSTATS_HTTPLOG_LEVEL", log.SlogLevelMap)
 	if matchedErr != nil {
 		return nil, matchedErr
 	}
