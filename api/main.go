@@ -9,6 +9,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/env"
 	"github.com/dresswithpockets/openstats/app/internal"
 	"github.com/dresswithpockets/openstats/app/log"
+	"github.com/dresswithpockets/openstats/app/mail"
 	"github.com/dresswithpockets/openstats/app/media"
 	"github.com/dresswithpockets/openstats/app/users"
 	"github.com/dresswithpockets/openstats/app/validation"
@@ -23,7 +24,6 @@ import (
 )
 
 func setupRouter() (*chi.Mux, error) {
-
 	logConcise := env.GetBool("OPENSTATS_HTTPLOG_CONCISE")
 	logFormat := httplog.SchemaECS.Concise(logConcise)
 
@@ -120,10 +120,15 @@ func main() {
 		golog.Fatal(err)
 	}
 
+	if err := mail.Setup(context.Background()); err != nil {
+		golog.Fatal(err)
+	}
+
 	if err := db.SetupDB(context.Background()); err != nil {
 		golog.Fatal(err)
 	}
 
+	// TODO: we probably aren't using this anymore, after switching to huma...
 	if err := validation.SetupValidations(); err != nil {
 		golog.Fatal(err)
 	}
@@ -198,24 +203,4 @@ func main() {
 	if err := http.ListenAndServe(address, router); err != nil {
 		golog.Fatal(err)
 	}
-
-	// TODO: permissions verification mechanism
-	//  Actions:
-	//   Create
-	//   Read
-	//   Update
-	//   Delete
-
-	/*
-		TODO: example resource with variable authorization requirements:
-			- Root can Create, Read, Update, Delete any non-Root User
-			- Admins can Create, Read, Update, Delete any non-Admin User
-			- Anyone can Read any User
-			- A User may Update their own User
-
-		CanRead() = true
-		CanCreate() = (IsRoot(CurrentUser) and IsNotRoot(CreatedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(CreatedUser))
-		CanUpdate() = (IsRoot(CurrentUser) and IsNotRoot(UpdatedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(UpdatedUser)) or (CurrentUser == UpdatedUser)
-		CanDelete() = (IsRoot(CurrentUser) and IsNotRoot(DeletedUser)) or (IsAdmin(CurrentUser) and IsNotAdmin(DeletedUser))
-	*/
 }
