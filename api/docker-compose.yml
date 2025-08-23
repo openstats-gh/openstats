@@ -5,7 +5,12 @@ services:
     ports:
       - "15432:5432"
     env_file:
-      - .env.local
+      - path: .env
+        required: true
+      - path: .env.local
+        required: false
+      - path: .env.development.local
+        required: false
     networks:
       - postgres-network
     volumes:
@@ -16,7 +21,12 @@ services:
     ports:
       - "15433:80"
     env_file:
-      - .env.local
+      - path: .env
+        required: true
+      - path: .env.local
+        required: false
+      - path: .env.development.local
+        required: false
     depends_on:
       - database
     networks:

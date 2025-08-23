@@ -46,9 +46,9 @@ Soon...
     cd web
     npm i
     ```
-6. Create `api/env.local` and `web/env.local`
-   - See `api/env.example` and `web/env.local` for instructions
-
+6. Create `api/.env.local` and `web/.env.local`
+   - See `api/.env.local.example` and `web/.env.local.example` for instructions
+   
 > [!NOTE]
 > If you see something like `command not found` when trying to use `migrate`, chances are the gopath `go/bin` directory isn't on your `PATH`! This is usually located in your home directory e.g. `C:/Users/YourUserName/go/bin` or `/home/username/go/bin`. See `go help install` for more information.
 

@@ -6,50 +6,60 @@ import (
 	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
+	"github.com/dresswithpockets/openstats/app/env"
 	"github.com/dresswithpockets/openstats/app/internal"
+	"github.com/dresswithpockets/openstats/app/log"
 	"github.com/dresswithpockets/openstats/app/media"
 	"github.com/dresswithpockets/openstats/app/users"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/httplog/v3"
+	"github.com/rotisserie/eris"
 	"github.com/rs/cors"
-	"log"
+	golog "log"
 	"log/slog"
 	"net/http"
 	"os"
 )
 
-func main() {
-	if err := db.SetupDB(context.Background()); err != nil {
-		log.Fatal(err)
+func setupRouter() (*chi.Mux, error) {
+
+	logConcise := env.GetBool("OPENSTATS_HTTPLOG_CONCISE")
+	logFormat := httplog.SchemaECS.Concise(logConcise)
+
+	logLevel, matchedErr := env.GetMatched("OPENSTATS_HTTPLOG_LEVEL", log.SlogLevelMap)
+	if matchedErr != nil {
+		return nil, matchedErr
 	}
 
-	if err := validation.SetupValidations(); err != nil {
-		log.Fatal(err)
-	}
-
-	logFormat := httplog.SchemaECS.Concise(true)
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	handlerOptions := &slog.HandlerOptions{
 		ReplaceAttr: logFormat.ReplaceAttr,
-	}))
+		Level:       logLevel,
+	}
 
-	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
-	// other admins
-	auth.AddRootAdminUser(context.Background())
+	var logger *slog.Logger
+	slogMode := env.GetString("OPENSTATS_HTTPLOG_MODE")
+	switch slogMode {
+	case "Text":
+		logger = slog.New(slog.NewTextHandler(os.Stdout, handlerOptions))
+	case "JSON":
+		logger = slog.New(slog.NewJSONHandler(os.Stdout, handlerOptions))
+	default:
+		return nil, eris.Errorf("invalid value for OPENSTATS_HTTPLOG_Mode: %s", slogMode)
+	}
 
 	router := chi.NewMux()
 
-	// Request logger
-	router.Use(httplog.RequestLogger(logger, &httplog.Options{
+	options := &httplog.Options{
 		// Level defines the verbosity of the request logs:
 		// slog.LevelDebug - log all responses (incl. OPTIONS)
 		// slog.LevelInfo  - log responses (excl. OPTIONS)
 		// slog.LevelWarn  - log 4xx and 5xx responses only (except for 429)
 		// slog.LevelError - log 5xx responses only
-		Level: slog.LevelDebug,
+		Level: logLevel,
 
 		// Set log output to Elastic Common Schema (ECS) format.
-		Schema: httplog.SchemaECS,
+		Schema: logFormat,
 
 		// RecoverPanics recovers from panics occurring in the underlying HTTP handlers
 		// and middlewares. It returns HTTP 500 unless response status was already set.
@@ -58,21 +68,71 @@ func main() {
 		RecoverPanics: true,
 
 		// Optionally, log selected request/response headers explicitly.
-		LogRequestHeaders:  []string{"Origin"},
-		LogResponseHeaders: []string{},
+		LogRequestHeaders:  env.GetList("OPENSTATS_HTTPLOG_REQUEST_HEADERS"),
+		LogResponseHeaders: env.GetList("OPENSTATS_HTTPLOG_RESPONSE_HEADERS"),
+	}
 
-		// Optionally, enable logging of request/response body based on custom conditions.
-		// Useful for debugging payload issues in development.
-		LogRequestBody:  func(r *http.Request) bool { return true },
-		LogResponseBody: func(r *http.Request) bool { return true },
-	}))
+	if env.GetBool("OPENSTATS_HTTPLOG_REQUEST_BODIES") {
+		options.LogRequestBody = func(r *http.Request) bool { return true }
+	}
 
+	if env.GetBool("OPENSTATS_HTTPLOG_RESPONSE_BODIES") {
+		options.LogResponseBody = func(r *http.Request) bool { return true }
+	}
+
+	router.Use(httplog.RequestLogger(logger, options))
 	router.Use(cors.New(cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: true,
 	}).Handler)
+
 	// TODO: CSRF middleware
 	// TODO: rate limit middleware
+
+	return router, nil
+}
+
+func main() {
+	if err := env.Load(); err != nil {
+		golog.Fatalf("Error loading envvars from .env files: %v", err)
+	}
+
+	env.Require(
+		"OPENSTATS_DB_ADDRESS",
+		"OPENSTATS_DB_PORT",
+		"OPENSTATS_DB_NAME",
+		"OPENSTATS_DB_USERNAME",
+		"OPENSTATS_DB_PASSWORD",
+		"OPENSTATS_DB_TRACE_LOG",
+		"OPENSTATS_SLOG_LEVEL",
+		"OPENSTATS_SLOG_MODE",
+		"OPENSTATS_HTTP_ADDR",
+		"OPENSTATS_HTTPLOG_LEVEL",
+		"OPENSTATS_HTTPLOG_MODE",
+		"OPENSTATS_HTTPLOG_CONCISE",
+		"OPENSTATS_HTTPLOG_REQUEST_HEADERS",
+		"OPENSTATS_HTTPLOG_RESPONSE_HEADERS",
+		"OPENSTATS_HTTPLOG_REQUEST_BODIES",
+		"OPENSTATS_HTTPLOG_RESPONSE_BODIES",
+	)
+
+	if err := log.Setup(); err != nil {
+		golog.Fatal(err)
+	}
+
+	if err := db.SetupDB(context.Background()); err != nil {
+		golog.Fatal(err)
+	}
+
+	if err := validation.SetupValidations(); err != nil {
+		golog.Fatal(err)
+	}
+
+	// we need a root admin user in order to do admin operations. The root user is also the only user that can add
+	// other admins
+	if err := auth.AddRootAdminUser(context.Background()); err != nil {
+		golog.Fatal(err)
+	}
 
 	config := huma.DefaultConfig("openstats API", "1.0.0")
 	config.Info = &huma.Info{
@@ -110,6 +170,11 @@ func main() {
 		},
 	}
 
+	router, routerErr := setupRouter()
+	if routerErr != nil {
+		golog.Fatal(routerErr)
+	}
+
 	api := humachi.New(router, config)
 
 	type ReadyResponse struct{ OK bool }
@@ -126,12 +191,12 @@ func main() {
 
 	// TODO: setup remote media when not local
 	media.SetupLocal(api)
-
 	users.RegisterRoutes(api)
 	internal.RegisterRoutes(api)
 
-	if err := http.ListenAndServe(":3000", router); err != nil {
-		log.Fatal(err)
+	address := env.GetString("OPENSTATS_HTTP_ADDR")
+	if err := http.ListenAndServe(address, router); err != nil {
+		golog.Fatal(err)
 	}
 
 	// TODO: permissions verification mechanism

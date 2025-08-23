@@ -24,11 +24,13 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
-.env
+# all dotenv files are ignored, except for a few which are expected to not contain secrets/credentials
 .env.*
 !.env.example
+!.env.*.example
+!.env.development
 !.env.test
+!.env.production
 
 # Editor/IDE
 # .idea/
