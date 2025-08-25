@@ -104,6 +104,17 @@ func RegisterRoutes(api huma.API) {
 	}, HandleConfirmEmail)
 
 	huma.Register(sessionApi, huma.Operation{
+		Path:        "/remove-email",
+		OperationID: "remove-email",
+		Method:      http.MethodPost,
+		Errors: []int{
+			http.StatusUnauthorized,
+		},
+		Summary:     "Remove an email",
+		Description: "Removes one of the emails from the current session's user",
+	}, HandleRemoveEmail)
+
+	huma.Register(sessionApi, huma.Operation{
 		Path:        "/profile",
 		OperationID: "get-session-profile",
 		Method:      http.MethodGet,
@@ -197,8 +208,8 @@ func HandleAddEmail(ctx context.Context, input *SendEmailConfInput) (output *Sen
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
-	if err = AddUserEmail(ctx, principal.User.Uuid, input.Body.Email); err != nil {
-		return nil, err
+	if err = AddUserEmailAndSendConfirmation(ctx, principal.User.Uuid, input.Body.Email); err != nil {
+		return nil, eris.Wrap(err, "error adding user email")
 	}
 
 	return &SendEmailConfOutput{}, nil
@@ -226,12 +237,37 @@ func HandleConfirmEmail(ctx context.Context, input *ConfirmEmailInput) (output *
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
-	validated, validateErr := ValidateUserEmail(ctx, principal.User.Uuid, input.Body.Email, input.Body.Code)
+	validated, validateErr := ValidateUserEmail(ctx, principal.User.ID, input.Body.Email, input.Body.Code)
 	if validateErr != nil {
 		return nil, validateErr
 	}
 
 	return &ConfirmEmailOutput{Body: EmailValidationResult{Validated: validated}}, nil
+}
+
+type RemoveEmailInput struct {
+	Body struct {
+		Email string `json:"email" format:"email"`
+	}
+}
+type RemoveEmailOutput struct{}
+
+func HandleRemoveEmail(ctx context.Context, input *RemoveEmailInput) (output *RemoveEmailOutput, err error) {
+	principal, hasPrincipal := auth.GetPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("no session")
+	}
+
+	_, err = db.Queries.RemoveEmail(ctx, query.RemoveEmailParams{
+		UserID: principal.User.ID,
+		Email:  input.Body.Email,
+	})
+
+	if eris.Is(err, sql.ErrNoRows) {
+		return nil, huma.Error404NotFound("that email isn't associated with this user")
+	}
+
+	return &RemoveEmailOutput{}, err
 }
 
 type InternalUser struct {

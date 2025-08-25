@@ -98,7 +98,7 @@ func main() {
 	}
 
 	env.Require(
-		"OPENSTATS_DB_ADDRESS",
+		"OPENSTATS_DB_HOST",
 		"OPENSTATS_DB_PORT",
 		"OPENSTATS_DB_NAME",
 		"OPENSTATS_DB_USERNAME",

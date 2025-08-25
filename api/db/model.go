@@ -19,7 +19,7 @@ func SetupDB(ctx context.Context) error {
 	var (
 		dbHost     = env.GetString("OPENSTATS_DB_HOST")
 		dbPort     = env.GetString("OPENSTATS_DB_PORT")
-		dbName     = env.GetString("OPENSTATS_DB_DATABASE")
+		dbName     = env.GetString("OPENSTATS_DB_NAME")
 		dbUsername = env.GetString("OPENSTATS_DB_USERNAME")
 		dbPassword = env.GetString("OPENSTATS_DB_PASSWORD")
 		dbTraceLog = env.GetBool("OPENSTATS_DB_TRACE_LOG")

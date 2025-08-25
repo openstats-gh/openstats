@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
+	"github.com/rotisserie/eris"
 	"net/url"
 	"time"
 )
@@ -21,43 +22,76 @@ var ValidateOptions = totp.ValidateOpts{
 	Algorithm: otp.AlgorithmSHA512,
 }
 
-func AddUserEmail(ctx context.Context, userUuid uuid.UUID, email string) error {
-	dbUserEmail, dbErr := db.Queries.AddOrGetUserEmail(ctx, query.AddOrGetUserEmailParams{
-		UserUuid:  userUuid,
-		Email:     email,
-		OtpSecret: rand.Text(),
-	})
-	if dbErr != nil {
-		return dbErr
-	}
-
-	totpCode, totpErr := totp.GenerateCodeCustom(dbUserEmail.OtpSecret, time.Now(), ValidateOptions)
+func SendEmailConfirmation(ctx context.Context, userEmail query.UserEmail) error {
+	totpCode, totpErr := totp.GenerateCodeCustom(userEmail.OtpSecret, time.Now(), ValidateOptions)
 
 	if totpErr != nil {
 		return totpErr
 	}
 
 	appBaseUrl := env.GetString("OPENSTATS_APP_BASEURL")
-	confUrl := fmt.Sprintf("%s/confirm-email?e=%s&c=%s", appBaseUrl, url.QueryEscape(email), url.QueryEscape(totpCode))
+	confUrl := fmt.Sprintf("%s/confirm-email?e=%s&c=%s", appBaseUrl, url.QueryEscape(userEmail.Email), url.QueryEscape(totpCode))
 	confBody := fmt.Sprintf("Confirm adding your email address to your Openstats account by clicking on the link below.<br/></br><a href=\"%s\">%s</a>", confUrl, confUrl)
 
 	return mail.Default.Send(ctx, mail.Mail{
 		From:    "noreply@openstats.me",
-		To:      email,
+		To:      userEmail.Email,
 		Subject: "Openstats Confirmation",
 		Body:    confBody,
 	})
 }
 
-func ValidateUserEmail(ctx context.Context, userUuid uuid.UUID, email, passcode string) (bool, error) {
+func AddUserEmailAndSendConfirmation(ctx context.Context, userUuid uuid.UUID, email string) error {
+	userEmail, err := db.Queries.AddOrGetUserEmailByUuid(ctx, query.AddOrGetUserEmailByUuidParams{
+		UserUuid:  userUuid,
+		Email:     email,
+		OtpSecret: rand.Text(),
+	})
+	if err != nil {
+		return eris.Wrap(err, "error adding user email")
+	}
+
+	totpCode, totpErr := totp.GenerateCodeCustom(userEmail.OtpSecret, time.Now(), ValidateOptions)
+
+	if totpErr != nil {
+		return totpErr
+	}
+
+	appBaseUrl := env.GetString("OPENSTATS_APP_BASEURL")
+	confUrl := fmt.Sprintf("%s/confirm-email?e=%s&c=%s", appBaseUrl, url.QueryEscape(userEmail.Email), url.QueryEscape(totpCode))
+	confBody := fmt.Sprintf("Confirm adding your email address to your Openstats account by clicking on the link below.<br/></br><a href=\"%s\">%s</a>", confUrl, confUrl)
+
+	return mail.Default.Send(ctx, mail.Mail{
+		From:    "noreply@openstats.me",
+		To:      userEmail.Email,
+		Subject: "Openstats Confirmation",
+		Body:    confBody,
+	})
+}
+
+func ValidateUserEmail(ctx context.Context, userId int32, email, passcode string) (bool, error) {
 	dbUserEmail, dbErr := db.Queries.GetUserEmail(ctx, query.GetUserEmailParams{
-		UserUuid: userUuid,
-		Email:    email,
+		UserID: userId,
+		Email:  email,
 	})
 
 	if dbErr != nil {
-		return false, dbErr
+		return false, eris.Wrap(dbErr, "error getting user email")
 	}
 
-	return totp.ValidateCustom(passcode, dbUserEmail.OtpSecret, time.Now(), ValidateOptions)
+	validated, validateErr := totp.ValidateCustom(passcode, dbUserEmail.OtpSecret, time.Now(), ValidateOptions)
+	if validateErr != nil {
+		return false, eris.Wrap(validateErr, "error validating OTP")
+	}
+
+	_, dbErr = db.Queries.ConfirmEmail(ctx, query.ConfirmEmailParams{
+		UserID: userId,
+		Email:  "",
+	})
+
+	if dbErr != nil {
+		return false, eris.Wrap(dbErr, "confirming user email in db")
+	}
+
+	return validated, nil
 }

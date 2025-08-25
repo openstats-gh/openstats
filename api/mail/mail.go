@@ -68,9 +68,12 @@ func (a *AmazonSesMailer) Send(ctx context.Context, mail Mail) error {
 		},
 	}
 	_, err := client.SendEmail(ctx, input)
+	if err != nil {
+		return eris.Wrap(err, "failed to send AmazonSES email")
+	}
 
 	// TODO: log mail send errors
-	return err
+	return nil
 }
 
 // LogMailer is a Mailer which doesn't send any mail over the network - it logs all sent mail to a logger, instead.
@@ -111,7 +114,7 @@ func setupLogMailer() (*LogMailer, error) {
 func setupAmazonSesMailer(ctx context.Context) (*AmazonSesMailer, error) {
 	awsConfig, err := config.LoadDefaultConfig(ctx)
 	if err != nil {
-		return nil, eris.Wrap(err, "")
+		return nil, eris.Wrap(err, "error loading the default AWS config")
 	}
 
 	stsClient := sts.NewFromConfig(awsConfig)

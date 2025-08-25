@@ -115,7 +115,7 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 		return nil, huma.Error401Unauthorized("already signed in")
 	}
 
-	newUser, newUserError := auth.AddNewUser(
+	createdUser, newUserError := auth.AddNewUser(
 		ctx,
 		registerBody.Body.DisplayName,
 		registerBody.Body.Email,
@@ -139,11 +139,11 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 
 	emailSent := false
 	if len(registerBody.Body.Email) > 0 {
-		emailErr := AddUserEmail(ctx, newUser.Uuid, registerBody.Body.Email)
+		emailErr := SendEmailConfirmation(ctx, createdUser.Email)
 		emailSent = emailErr == nil
 	}
 
-	signedJwt, token, createErr := auth.CreateSessionToken(ctx, newUser.Uuid)
+	signedJwt, token, createErr := auth.CreateSessionToken(ctx, createdUser.User.Uuid)
 	if createErr != nil {
 		return nil, createErr
 	}

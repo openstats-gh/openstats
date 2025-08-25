@@ -27,15 +27,34 @@ $$ language sql;
 /*
 Example soft-delete query using deleted_record table:
 
-with deleted AS (
-    delete from users
-    where id = ?
-    returning *
-)
-insert into deleted_record(source_table, source_id, data)
-select 'users', id, to_jsonb(deleted.*)
-from deleted
-returning *;
+    with deleted AS (
+        delete from users
+        where id = ?
+        returning *
+    )
+    insert into deleted_record(source_table, source_id, data)
+    select 'users', id, to_jsonb(deleted.*)
+    from deleted
+    returning *;
+
+alternatively, we can create a function:
+
+    create function deleted_record_insert() returns trigger
+        language plpgsql
+    as $$
+        begin
+            execute 'insert into deleted_record (data, object_id, table_name) values ($1, $2, $3)'
+            using to_jsonb(old.*), old.id, TG_TABLE_NAME;
+
+            return old;
+        end;
+    $$;
+
+and add an after delete trigger:
+
+    create trigger deleted_record_insert after delete on my_table
+        for each row execute function deleted_record_insert();
+
 */
 create table if not exists deleted_record
 (

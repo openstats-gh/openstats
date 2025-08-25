@@ -160,20 +160,13 @@ type UserDisplayName struct {
 }
 
 type UserEmail struct {
-	ID        int32
-	CreatedAt time.Time
-	UserID    int32
-	Email     string
-	OtpSecret string
-}
-
-type UserEmailConfirmation struct {
 	ID          int32
 	CreatedAt   time.Time
-	UserEmailID int32
-	Code        string
-	ExpiresAt   time.Time
+	UpdatedAt   time.Time
+	UserID      int32
+	Email       string
 	ConfirmedAt pgtype.Timestamptz
+	OtpSecret   string
 }
 
 type UserLatestDisplayName struct {
@@ -184,10 +177,12 @@ type UserLatestDisplayName struct {
 }
 
 type UserLatestEmail struct {
-	ID        int32
-	CreatedAt time.Time
-	UserID    int32
-	Email     string
+	ID          int32
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	UserID      int32
+	Email       string
+	ConfirmedAt pgtype.Timestamptz
 }
 
 type UserPassword struct {

@@ -4,19 +4,20 @@ import (
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
-	"errors"
 	"fmt"
+	"github.com/rotisserie/eris"
 	"strings"
 
 	"golang.org/x/crypto/argon2"
 )
 
 var (
-	ErrInvalidHash                = errors.New("the encoded hash is not in the correct format")
-	ErrIncompatibleImplementation = errors.New("implementation is not argon2id")
-	ErrIncompatibleVersion        = errors.New("incompatible version of argon2")
-	ErrMissingParameters          = errors.New("missing a parameter")
-	ErrHashMismatch               = errors.New("the password does not match the encoded hash")
+	ErrInvalidHash                = eris.New("the encoded hash is not in the correct format")
+	ErrIncompatibleImplementation = eris.New("implementation is not argon2id")
+	ErrCantDecodeVersion          = eris.New("can't decode the argon2id version")
+	ErrIncompatibleVersion        = eris.New("incompatible version of argon2")
+	ErrMissingParameters          = eris.New("missing a parameter")
+	ErrHashMismatch               = eris.New("the password does not match the encoded hash")
 )
 
 type Parameters struct {
@@ -27,16 +28,23 @@ type Parameters struct {
 	KeyLength   uint32
 }
 
-func GenerateRandomBytes(n uint) ([]byte, error) {
-	b := make([]byte, n)
-	_, err := rand.Read(b)
+// GenerateRandomBytes generates n random bytes into a []byte from a cryptographic stream
+//
+// err will always be wrapped with eris.Wrap
+func GenerateRandomBytes(n uint) (b []byte, err error) {
+	b = make([]byte, n)
+	_, err = rand.Read(b)
 	if err != nil {
-		return nil, err
+		return nil, eris.Wrap(err, "failed to generate random bytes")
 	}
 
-	return b, nil
+	return
 }
 
+// EncodePassword encodes the given password & parameters into a string; the algorithm, parameters, salt, and hash can
+// be decoded from this string and later used to validate any given password string.
+//
+// Any errors will always be wrapped by eris.Wrap
 func EncodePassword(password string, parameters Parameters) (string, error) {
 	salt, saltErr := GenerateRandomBytes(uint(parameters.SaltLength))
 	if saltErr != nil {
@@ -83,6 +91,7 @@ func decodeHash(encodedHash string) (parameters Parameters, salt, hash []byte, e
 	var version int
 	_, err = fmt.Sscanf(vals[2], "v=%d", &version)
 	if err != nil {
+		err = eris.Wrap(err, "error decoding implementation version")
 		return
 	}
 
@@ -102,6 +111,7 @@ func decodeHash(encodedHash string) (parameters Parameters, salt, hash []byte, e
 		var value int
 		_, err = fmt.Sscanf(pair, "%c=%d", &key, &value)
 		if err != nil {
+			err = eris.Wrap(err, "error decoding a parameter")
 			return
 		}
 
@@ -121,11 +131,13 @@ func decodeHash(encodedHash string) (parameters Parameters, salt, hash []byte, e
 
 	salt, err = base64.RawStdEncoding.DecodeString(vals[4])
 	if err != nil {
+		err = eris.Wrap(err, "error decoding salt bytes from base64")
 		return
 	}
 
 	hash, err = base64.RawStdEncoding.DecodeString(vals[5])
 	if err != nil {
+		err = eris.Wrap(err, "error decoding hash bytes from base64")
 		return
 	}
 
@@ -134,6 +146,10 @@ func decodeHash(encodedHash string) (parameters Parameters, salt, hash []byte, e
 	return
 }
 
+// VerifyPassword returns a nil error if the password passes validation against the encoded password information
+// in encodedHash
+//
+// Any errors will always be wrapped by eris.Wrap
 func VerifyPassword(password, encodedHash string) error {
 	parameters, salt, hash, err := decodeHash(encodedHash)
 	if err != nil {
