@@ -1,4 +1,4 @@
-TODO add password reset endpoint (requires session)
+
 
 TODO add forgot-slug endpoint (without session)
 TODO add forgot-password endpoint (without session)
@@ -14,3 +14,5 @@ TODO add account/data deletion
 DONE add email-confirmation endpoint (requires session)
 DONE add resend-email-confirmation endpoint (requires session)
 DONE add change email endpoint (requires session)
+
+DONE add password reset endpoint (requires session)
