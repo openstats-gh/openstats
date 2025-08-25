@@ -338,6 +338,23 @@ func (q *Queries) GetUserLatestDisplayName(ctx context.Context, userID int32) (U
 	return i, err
 }
 
+const getUserPassword = `-- name: GetUserPassword :one
+select id, created_at, updated_at, user_id, encoded_hash from user_password where user_id = $1
+`
+
+func (q *Queries) GetUserPassword(ctx context.Context, userID int32) (UserPassword, error) {
+	row := q.db.QueryRow(ctx, getUserPassword, userID)
+	var i UserPassword
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.UserID,
+		&i.EncodedHash,
+	)
+	return i, err
+}
+
 const getUserRecentAchievements = `-- name: GetUserRecentAchievements :many
 select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description
 from achievement_progress ap
@@ -466,6 +483,22 @@ func (q *Queries) GetUserWithName(ctx context.Context, userUuid uuid.UUID) (GetU
 		&i.DisplayName,
 	)
 	return i, err
+}
+
+const replacePassword = `-- name: ReplacePassword :exec
+update user_password
+    set encoded_hash = $1
+where user_id = $2
+`
+
+type ReplacePasswordParams struct {
+	EncodedHash string
+	UserID      int32
+}
+
+func (q *Queries) ReplacePassword(ctx context.Context, arg ReplacePasswordParams) error {
+	_, err := q.db.Exec(ctx, replacePassword, arg.EncodedHash, arg.UserID)
+	return err
 }
 
 const updateSessionProfile = `-- name: UpdateSessionProfile :exec

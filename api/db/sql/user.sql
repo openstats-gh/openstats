@@ -61,6 +61,14 @@ insert into users (slug) values ($1) returning *;
 -- name: AddUserPassword :exec
 insert into user_password(user_id, encoded_hash) values ($1, $2);
 
+-- name: GetUserPassword :one
+select * from user_password where user_id = @user_id;
+
+-- name: ReplacePassword :exec
+update user_password
+    set encoded_hash = @encoded_hash
+where user_id = @user_id;
+
 -- name: AddUserSlugHistory :exec
 insert into user_slug_history(user_id, slug) values ($1, $2);
 
