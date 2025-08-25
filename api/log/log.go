@@ -17,7 +17,7 @@ var SlogLevelMap = map[string]slog.Level{
 }
 
 func Setup() error {
-	logLevel, matchedErr := env.GetMatched("OPENSTATS_SLOG_LEVEL", SlogLevelMap)
+	logLevel, matchedErr := env.GetMapped("OPENSTATS_SLOG_LEVEL", SlogLevelMap)
 	if matchedErr != nil {
 		return matchedErr
 	}

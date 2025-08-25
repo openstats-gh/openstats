@@ -1,12 +1,16 @@
+TODO add password reset endpoint (requires session)
+
 TODO add forgot-slug endpoint (without session)
 TODO add forgot-password endpoint (without session)
 
-TODO add email-confirmation endpoint (requires session) - they will be required to log in via the frontend, and then the code will be forwarded to the endpoint
-TODO add change email endpoint (requires session)
-TODO add resend-email-confirmation endpoint (requires session)
-TODO add password reset endpoint (requires session)
+TODO use SMTP-based validation to ensure that the email is valid, before sending the email via AWS SES
+     AWS may actually do this validation for us?
 
 TODO create generic C-ABI-compatible SDK that interfaces with the openstats stats submission API
 TODO fork goldberg to integrate the C SDK
 
 TODO add account/data deletion
+
+DONE add email-confirmation endpoint (requires session)
+DONE add resend-email-confirmation endpoint (requires session)
+DONE add change email endpoint (requires session)

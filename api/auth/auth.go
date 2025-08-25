@@ -81,7 +81,7 @@ var (
 	ErrInvalidPassword     = errors.New("invalid password")
 )
 
-func AddNewUser(ctx context.Context, displayName, email, slug, pass string) (newUser *query.User, err error) {
+func AddNewUser(ctx context.Context, displayName, email, slug, pass string) (newUser *db.CreatedUser, err error) {
 	if len(email) > 0 && !validation.ValidEmailAddress(email) {
 		return nil, eris.Wrap(ErrInvalidEmailAddress, "validation error")
 	}

@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"errors"
+	"crypto/rand"
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/dresswithpockets/openstats/app/db/query"
@@ -11,10 +11,11 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rotisserie/eris"
 	"time"
 )
 
-var ErrSlugAlreadyInUse = errors.New("slug already in use")
+var ErrSlugAlreadyInUse = eris.New("slug already in use")
 
 type Actions struct {
 	pool    *pgxpool.Pool
@@ -68,63 +69,71 @@ func (a *Actions) ScanRow(ctx context.Context, sqlizer squirrel.Sqlizer, dest ..
 	return a.pool.QueryRow(ctx, sql, args...).Scan(dest...)
 }
 
-func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, email, displayName string) (*query.User, error) {
-	tx, txErr := a.pool.BeginTx(ctx, pgx.TxOptions{})
-	if txErr != nil {
-		return nil, txErr
+type CreatedUser struct {
+	User  query.User
+	Email query.UserEmail
+}
+
+func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, email, displayName string) (*CreatedUser, error) {
+	tx, err := a.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return nil, eris.Wrap(err, "error beginning transaction")
 	}
 
 	//goland:noinspection GoUnhandledErrorResult
 	defer tx.Rollback(ctx)
 
 	qtx := a.queries.WithTx(tx)
-	user, createUserErr := qtx.AddUser(ctx, slug)
 
-	if IsUniqueConstraintErr(createUserErr) {
+	var createdUser CreatedUser
+	createdUser.User, err = qtx.AddUser(ctx, slug)
+	if IsUniqueConstraintErr(err) {
 		return nil, ErrSlugAlreadyInUse
 	}
 
-	if createUserErr != nil {
-		return nil, createUserErr
+	if err != nil {
+		return nil, eris.Wrap(err, "error adding user to db")
 	}
 
-	if err := qtx.AddUserSlugHistory(ctx, query.AddUserSlugHistoryParams{
-		UserID: user.ID,
+	if err = qtx.AddUserSlugHistory(ctx, query.AddUserSlugHistoryParams{
+		UserID: createdUser.User.ID,
 		Slug:   slug,
 	}); err != nil {
-		return nil, err
+		return nil, eris.Wrap(err, "error adding slug to history")
 	}
 
-	if err := qtx.AddUserPassword(ctx, query.AddUserPasswordParams{
-		UserID:      user.ID,
+	if err = qtx.AddUserPassword(ctx, query.AddUserPasswordParams{
+		UserID:      createdUser.User.ID,
 		EncodedHash: encodedPasswordHash,
 	}); err != nil {
-		return nil, err
+		return nil, eris.Wrap(err, "error adding user password")
 	}
 
 	if len(email) > 0 {
-		if err := qtx.AddUserEmail(ctx, query.AddUserEmailParams{
-			UserID: user.ID,
-			Email:  email,
-		}); err != nil {
-			return nil, err
+		createdUser.Email, err = qtx.AddOrGetUserEmail(ctx, query.AddOrGetUserEmailParams{
+			UserID:    createdUser.User.ID,
+			Email:     email,
+			OtpSecret: rand.Text(),
+		})
+		if err != nil {
+			return nil, eris.Wrap(err, "error adding user email")
 		}
 	}
 
 	if len(displayName) > 0 {
-		if err := qtx.AddUserDisplayName(ctx, query.AddUserDisplayNameParams{
-			UserID:      user.ID,
+		if err = qtx.AddUserDisplayName(ctx, query.AddUserDisplayNameParams{
+			UserID:      createdUser.User.ID,
 			DisplayName: displayName,
 		}); err != nil {
-			return nil, err
+			return nil, eris.Wrap(err, "error adding user display name")
 		}
 	}
 
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
+	if err = tx.Commit(ctx); err != nil {
+		return nil, eris.Wrap(err, "error committing transaction")
 	}
 
-	return &user, nil
+	return &createdUser, nil
 }
 
 func (a *Actions) CreateGameSessionAndToken(

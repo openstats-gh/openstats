@@ -21,7 +21,7 @@ func GetString(key string) string {
 	return os.Getenv(key)
 }
 
-func GetMatched[T any](key string, into map[string]T) (T, error) {
+func GetMapped[T any](key string, into map[string]T) (T, error) {
 	value, exists := os.LookupEnv(key)
 	if !exists {
 		var result T
@@ -35,6 +35,16 @@ func GetMatched[T any](key string, into map[string]T) (T, error) {
 	}
 
 	return result, nil
+}
+
+func GetMatched[T any](key string, into func(value string) (T, error)) (T, error) {
+	value, exists := os.LookupEnv(key)
+	if !exists {
+		var result T
+		return result, eris.Errorf("%s must be set", key)
+	}
+
+	return into(value)
 }
 
 func GetList(key string) []string {

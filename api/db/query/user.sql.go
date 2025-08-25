@@ -43,20 +43,6 @@ func (q *Queries) AddUserDisplayName(ctx context.Context, arg AddUserDisplayName
 	return err
 }
 
-const addUserEmail = `-- name: AddUserEmail :exec
-insert into user_email(user_id, email) values ($1, $2)
-`
-
-type AddUserEmailParams struct {
-	UserID int32
-	Email  string
-}
-
-func (q *Queries) AddUserEmail(ctx context.Context, arg AddUserEmailParams) error {
-	_, err := q.db.Exec(ctx, addUserEmail, arg.UserID, arg.Email)
-	return err
-}
-
 const addUserPassword = `-- name: AddUserPassword :exec
 insert into user_password(user_id, encoded_hash) values ($1, $2)
 `
@@ -321,37 +307,6 @@ func (q *Queries) GetUserDisplayNames(ctx context.Context, userID int32) ([]User
 			&i.CreatedAt,
 			&i.UserID,
 			&i.DisplayName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getUserEmails = `-- name: GetUserEmails :many
-select id, created_at, user_id, email
-from user_email
-where user_id = $1
-`
-
-func (q *Queries) GetUserEmails(ctx context.Context, userID int32) ([]UserEmail, error) {
-	rows, err := q.db.Query(ctx, getUserEmails, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserEmail
-	for rows.Next() {
-		var i UserEmail
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UserID,
-			&i.Email,
 		); err != nil {
 			return nil, err
 		}
