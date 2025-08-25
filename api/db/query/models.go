@@ -164,13 +164,14 @@ type UserEmail struct {
 	CreatedAt time.Time
 	UserID    int32
 	Email     string
+	OtpSecret string
 }
 
 type UserEmailConfirmation struct {
 	ID          int32
 	CreatedAt   time.Time
-	Uuid        uuid.UUID
 	UserEmailID int32
+	Code        string
 	ExpiresAt   time.Time
 	ConfirmedAt pgtype.Timestamptz
 }

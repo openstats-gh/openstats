@@ -64,9 +64,6 @@ insert into user_password(user_id, encoded_hash) values ($1, $2);
 -- name: AddUserSlugHistory :exec
 insert into user_slug_history(user_id, slug) values ($1, $2);
 
--- name: AddUserEmail :exec
-insert into user_email(user_id, email) values ($1, $2);
-
 -- name: AddUserDisplayName :exec
 insert into user_display_name(user_id, display_name) values ($1, $2);
 
@@ -86,11 +83,6 @@ from user_display_name udn
 where udn.user_id = $1
 order by udn.created_at desc
 limit 1;
-
--- name: GetUserEmails :many
-select *
-from user_email
-where user_id = $1;
 
 -- name: GetUserDevelopers :many
 select d.slug, d.created_at, dm.created_at as joined_at
