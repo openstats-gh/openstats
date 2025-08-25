@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"errors"
 	"image/png"
-	"log"
 	"net/http"
 	"time"
 
@@ -80,6 +79,29 @@ func RegisterRoutes(api huma.API) {
 		Summary:     "Get session summary",
 		Description: "Get details about the current authenticated session and the associated user",
 	}, HandleGetSession)
+
+	huma.Register(sessionApi, huma.Operation{
+		Path:        "/add-email",
+		OperationID: "add-email",
+		Method:      http.MethodPost,
+		Errors: []int{
+			http.StatusUnauthorized,
+			http.StatusConflict,
+		},
+		Summary:     "Add an email",
+		Description: "Sends a confirmation to the email; once confirmed by /confirm-email, the email will be associated with the current session's user",
+	}, HandleAddEmail)
+
+	huma.Register(sessionApi, huma.Operation{
+		Path:        "/confirm-email",
+		OperationID: "confirm-email",
+		Method:      http.MethodPost,
+		Errors: []int{
+			http.StatusUnauthorized,
+		},
+		Summary:     "Confirm an email",
+		Description: "Validates an email confirmation TOTP; if successful, the email will be marked as verified",
+	}, HandleConfirmEmail)
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/profile",
@@ -160,6 +182,58 @@ func RegisterRoutes(api huma.API) {
 	}, HandleGetUserProfile)
 }
 
+type SendEmailConfInput struct {
+	Body struct {
+		Email string `json:"email" format:"email"`
+	}
+}
+
+type SendEmailConfOutput struct{}
+
+func HandleAddEmail(ctx context.Context, input *SendEmailConfInput) (output *SendEmailConfOutput, err error) {
+	principal, hasPrincipal := auth.GetPrincipal(ctx)
+	if !hasPrincipal {
+		// shouldn't ever get here due to middleware check
+		return nil, huma.Error401Unauthorized("no session")
+	}
+
+	if err = AddUserEmail(ctx, principal.User.Uuid, input.Body.Email); err != nil {
+		return nil, err
+	}
+
+	return &SendEmailConfOutput{}, nil
+}
+
+type ConfirmEmailInput struct {
+	Body struct {
+		Email string `json:"email" format:"email"`
+		Code  string `json:"code"`
+	}
+}
+
+type EmailValidationResult struct {
+	Validated bool `json:"validated"`
+}
+
+type ConfirmEmailOutput struct {
+	Body EmailValidationResult
+}
+
+func HandleConfirmEmail(ctx context.Context, input *ConfirmEmailInput) (output *ConfirmEmailOutput, err error) {
+	principal, hasPrincipal := auth.GetPrincipal(ctx)
+	if !hasPrincipal {
+		// shouldn't ever get here due to middleware check
+		return nil, huma.Error401Unauthorized("no session")
+	}
+
+	validated, validateErr := ValidateUserEmail(ctx, principal.User.Uuid, input.Body.Email, input.Body.Code)
+	if validateErr != nil {
+		return nil, validateErr
+	}
+
+	return &ConfirmEmailOutput{Body: EmailValidationResult{Validated: validated}}, nil
+}
+
 type InternalUser struct {
 	RID         rid.RID       `json:"rid" readOnly:"true"`
 	CreatedAt   time.Time     `json:"createdAt" readOnly:"true"`
@@ -211,74 +285,6 @@ func (i *ProfileOtherUserUnlockedAchievements) MapFromRow(row query.GetOtherUser
 		},
 		UserFriendlyName: row.UserFriendlyName,
 	}
-}
-
-type UserProfile struct {
-	User                 InternalUser                  `json:"user"`
-	UnlockedAchievements []ProfileUnlockedAchievements `json:"unlockedAchievements,omitempty" doc:"Most recent achievements unlocked by this user" readOnly:"true"`
-	// TODO: OtherUserAchievements can probably be cached with a short TTL since it'll be the same across all user profiles.
-	OtherUserAchievements []ProfileOtherUserUnlockedAchievements `json:"otherUserAchievements,omitempty" doc:"Most recent achievements unlocked by other users" readOnly:"true"`
-}
-
-func GetUserProfile(ctx context.Context, userUuid uuid.UUID) (UserProfile, error) {
-	sessionProfile, err := db.Queries.GetUserSessionProfile(ctx, userUuid)
-	if err != nil {
-		// this shouldn't ever error if the user request has as principal
-		return UserProfile{}, err
-	}
-
-	recentUserAchievements, err := db.Queries.GetUserRecentAchievements(ctx, query.GetUserRecentAchievementsParams{
-		UserUuid: userUuid,
-		Limit:    20,
-	})
-
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Println(err)
-		return UserProfile{}, err
-	}
-
-	recentOtherUserAchievements, err := db.Queries.GetOtherUserRecentAchievements(ctx, query.GetOtherUserRecentAchievementsParams{
-		ExcludedUserUuid: userUuid,
-		Limit:            20,
-	})
-
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		log.Println(err)
-		return UserProfile{}, err
-	}
-
-	unlocks := make([]ProfileUnlockedAchievements, len(recentUserAchievements))
-	for unlockIdx, _ := range unlocks {
-		unlocks[unlockIdx].MapFromRow(recentUserAchievements[unlockIdx])
-	}
-
-	otherUserUnlocks := make([]ProfileOtherUserUnlockedAchievements, len(recentUserAchievements))
-	for unlockIdx, _ := range otherUserUnlocks {
-		otherUserUnlocks[unlockIdx].MapFromRow(recentOtherUserAchievements[unlockIdx])
-	}
-
-	var avatar *users.Avatar
-	if sessionProfile.AvatarBlurhash != nil && sessionProfile.AvatarUuid.Valid {
-		avatar = &users.Avatar{
-			Url:      media.GetAvatarUrl("users", sessionProfile.AvatarUuid.UUID),
-			Blurhash: *sessionProfile.AvatarBlurhash,
-		}
-	}
-
-	return UserProfile{
-		User: InternalUser{
-			RID: rid.RID{
-				Prefix: auth.UserRidPrefix,
-				ID:     sessionProfile.Uuid,
-			},
-			CreatedAt:   sessionProfile.CreatedAt,
-			Slug:        &sessionProfile.Slug,
-			DisplayName: &sessionProfile.DisplayName,
-			Avatar:      avatar,
-		},
-		UnlockedAchievements:  unlocks,
-		OtherUserAchievements: otherUserUnlocks,
-	}, nil
 }
 
 type GetSessionResponse struct {

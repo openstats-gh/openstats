@@ -85,26 +85,29 @@ func (c ConflictSignUpSlug) ErrorDetail() *huma.ErrorDetail {
 	}
 }
 
-type SignUpBody struct {
+type Registration struct {
 	// Email is optional, and just used for resetting the user's password
-	Email string `body:"email" format:"email"`
+	Email string `json:"email" format:"email"`
+
+	EmailConfirmationSent bool `json:"emailConfirmationSent" readOnly:"true"`
 
 	// DisplayName is optional, and is only used when displaying their profile on the website
-	DisplayName string `body:"displayName" minLength:"1" maxLength:"64"`
+	DisplayName string `json:"displayName" minLength:"1" maxLength:"64"`
 
 	// Slug is a unique username for the user
-	Slug string `body:"slug" format:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+	Slug string `json:"slug" format:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
 
 	// Password is the user's login password
-	Password string `body:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32" writeOnly:"true"`
 }
 
 type SignUpRequest struct {
-	Body SignUpBody
+	Body Registration
 }
 
 type SignUpResponse struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
+	Body      Registration
 }
 
 func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUpResponse, error) {
@@ -134,6 +137,12 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 		return nil, newUserError
 	}
 
+	emailSent := false
+	if len(registerBody.Body.Email) > 0 {
+		emailErr := AddUserEmail(ctx, newUser.Uuid, registerBody.Body.Email)
+		emailSent = emailErr == nil
+	}
+
 	signedJwt, token, createErr := auth.CreateSessionToken(ctx, newUser.Uuid)
 	if createErr != nil {
 		return nil, createErr
@@ -148,6 +157,12 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 			Expires:  token.ExpiresAt,
 			Secure:   env.GetBool("OPENSTATS_SESSION_COOKIE_SECURE"),
 			SameSite: http.SameSiteStrictMode,
+		},
+		Body: Registration{
+			Email:                 registerBody.Body.Email,
+			EmailConfirmationSent: emailSent,
+			DisplayName:           registerBody.Body.DisplayName,
+			Slug:                  registerBody.Body.Slug,
 		},
 	}, nil
 }
