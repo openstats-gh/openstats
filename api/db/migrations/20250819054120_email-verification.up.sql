@@ -30,5 +30,10 @@ from users u
                                        (ue1.created_at < ue2.created_at or
                                         (ue1.created_at = ue2.created_at and ue1.id < ue2.id));
 
+alter table user_email add column otp_secret text not null default digest(gen_random_bytes(128), 'sha512');
 alter table user_email drop column confirmed_at;
+
+drop trigger user_email_moddatetime on user_email;
 alter table user_email drop column updated_at;
+
+create unique index if not exists user_email_unique_idx on user_email(user_id, email);

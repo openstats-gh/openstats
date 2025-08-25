@@ -1,4 +1,14 @@
+drop index if exists user_email_unique_idx;
+
+alter table user_email drop column if exists otp_secret;
+
 alter table user_email add column if not exists updated_at timestamptz not null default now();
+create or replace trigger user_email_moddatetime
+    before update
+    on user_email
+    for each row
+execute function moddatetime(updated_at);
+
 alter table user_email add column if not exists confirmed_at timestamptz null;
 
 -- add back updated_at and confirmed_at to user_email based on some assumptions about user_email_confirmation
