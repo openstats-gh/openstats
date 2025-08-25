@@ -88,6 +88,7 @@ func RegisterRoutes(api huma.API) {
 			http.StatusUnauthorized,
 			http.StatusConflict,
 		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Add an email",
 		Description: "Sends a confirmation to the email; once confirmed by /confirm-email, the email will be associated with the current session's user",
 	}, HandleAddEmail)
@@ -99,6 +100,7 @@ func RegisterRoutes(api huma.API) {
 		Errors: []int{
 			http.StatusUnauthorized,
 		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Confirm an email",
 		Description: "Validates an email confirmation TOTP; if successful, the email will be marked as verified",
 	}, HandleConfirmEmail)
@@ -110,6 +112,7 @@ func RegisterRoutes(api huma.API) {
 		Errors: []int{
 			http.StatusUnauthorized,
 		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Remove an email",
 		Description: "Removes one of the emails from the current session's user",
 	}, HandleRemoveEmail)
