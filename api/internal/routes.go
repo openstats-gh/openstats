@@ -88,6 +88,7 @@ func RegisterRoutes(api huma.API) {
 			http.StatusUnauthorized,
 			http.StatusConflict,
 		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Add an email",
 		Description: "Sends a confirmation to the email; once confirmed by /confirm-email, the email will be associated with the current session's user",
 	}, HandleAddEmail)
@@ -99,6 +100,7 @@ func RegisterRoutes(api huma.API) {
 		Errors: []int{
 			http.StatusUnauthorized,
 		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Confirm an email",
 		Description: "Validates an email confirmation TOTP; if successful, the email will be marked as verified",
 	}, HandleConfirmEmail)
@@ -110,9 +112,22 @@ func RegisterRoutes(api huma.API) {
 		Errors: []int{
 			http.StatusUnauthorized,
 		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Remove an email",
 		Description: "Removes one of the emails from the current session's user",
 	}, HandleRemoveEmail)
+
+	huma.Register(sessionApi, huma.Operation{
+		Path:        "/replace-password",
+		OperationID: "replace-password",
+		Method:      http.MethodPost,
+		Errors: []int{
+			http.StatusUnauthorized,
+		},
+		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
+		Summary:     "Change user's password",
+		Description: "Changes the current session user's password",
+	}, HandleChangePassword)
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/profile",
@@ -268,6 +283,28 @@ func HandleRemoveEmail(ctx context.Context, input *RemoveEmailInput) (output *Re
 	}
 
 	return &RemoveEmailOutput{}, err
+}
+
+type ChangePasswordInput struct {
+	Body struct {
+		CurrentPassword string `json:"currentPassword" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+		NewPassword     string `json:"newPassword" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	}
+}
+type ChangePasswordOutput struct{}
+
+func HandleChangePassword(ctx context.Context, input *ChangePasswordInput) (output *ChangePasswordOutput, err error) {
+	principal, hasPrincipal := auth.GetPrincipal(ctx)
+	if !hasPrincipal {
+		return nil, huma.Error401Unauthorized("no session")
+	}
+
+	err = auth.ReplaceUserPassword(ctx, principal.User.ID, input.Body.CurrentPassword, input.Body.NewPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ChangePasswordOutput{}, nil
 }
 
 type InternalUser struct {

@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"github.com/Masterminds/squirrel"
 	"github.com/dresswithpockets/openstats/app/db/query"
@@ -190,16 +191,26 @@ func (a *Actions) Transact(ctx context.Context, do func(context.Context, *query.
 	var tx pgx.Tx
 	tx, err = a.pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		return
+		return eris.Wrap(err, "error beginning transaction")
 	}
 
 	qtx := a.queries.WithTx(tx)
 	if err = do(ctx, qtx); err != nil {
-		return tx.Rollback(ctx)
+		rollbackErr := tx.Rollback(ctx)
+		if rollbackErr != nil {
+			return eris.Wrap(errors.Join(err, rollbackErr), "error rolling back transaction")
+		}
+
+		return eris.Wrap(err, "error in transaction body, so it was rolled back")
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		return tx.Rollback(ctx)
+		rollbackErr := tx.Rollback(ctx)
+		if rollbackErr != nil {
+			return eris.Wrap(errors.Join(err, rollbackErr), "error rolling back transaction after commit error")
+		}
+
+		return eris.Wrap(err, "error in committing transaction, so it was rolled back")
 	}
 
 	return nil

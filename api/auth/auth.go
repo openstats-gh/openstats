@@ -106,6 +106,34 @@ func AddNewUser(ctx context.Context, displayName, email, slug, pass string) (new
 	return db.DB.CreateUser(ctx, slug, encodedPassword, email, displayName)
 }
 
+func ReplaceUserPassword(ctx context.Context, userId int32, oldPassword, newPassword string) error {
+	if !validation.ValidPassword(newPassword) {
+		return eris.Wrap(ErrInvalidPassword, "validation error")
+	}
+
+	return db.DB.Transact(ctx, func(ctx context.Context, qtx *query.Queries) error {
+		result, findErr := qtx.GetUserPassword(ctx, userId)
+		if findErr != nil {
+			return eris.Wrap(findErr, "error getting user password")
+		}
+
+		verifyErr := password.VerifyPassword(oldPassword, result.EncodedHash)
+		if verifyErr != nil {
+			return verifyErr
+		}
+
+		encodedHash, passwordErr := password.EncodePassword(newPassword, ArgonParameters)
+		if passwordErr != nil {
+			return passwordErr
+		}
+
+		return qtx.ReplacePassword(ctx, query.ReplacePasswordParams{
+			UserID:      userId,
+			EncodedHash: encodedHash,
+		})
+	})
+}
+
 func CreateSessionToken(ctx context.Context, userLookupId uuid.UUID) (signedToken string, token query.Token, err error) {
 	nowTime := time.Now().UTC()
 	token, err = db.Queries.CreateToken(ctx, query.CreateTokenParams{
