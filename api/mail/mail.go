@@ -68,6 +68,8 @@ func (a *AmazonSesMailer) Send(ctx context.Context, mail Mail) error {
 		},
 	}
 	_, err := client.SendEmail(ctx, input)
+
+	// TODO: log mail send errors
 	return err
 }
 
