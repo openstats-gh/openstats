@@ -50,7 +50,7 @@ func RegisterRoutes(api huma.API) {
 		Metadata:    map[string]any{"NoUserAuth": true},
 		Summary:     "Sign up",
 		Description: "Create a new user and sign into a new session as the new user",
-	}, auth.HandlePostSignUp)
+	}, HandlePostSignUp)
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/sign-in",
@@ -60,7 +60,7 @@ func RegisterRoutes(api huma.API) {
 		Metadata:    map[string]any{"NoUserAuth": true},
 		Summary:     "Sign in",
 		Description: "Sign into a new session as an existing user",
-	}, auth.HandlePostSignIn)
+	}, HandlePostSignIn)
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/sign-out",
@@ -69,7 +69,7 @@ func RegisterRoutes(api huma.API) {
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Sign out",
 		Description: "Sign out of the current session, and invalidate the session token",
-	}, auth.HandlePostSignOut)
+	}, HandlePostSignOut)
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/",
@@ -79,7 +79,7 @@ func RegisterRoutes(api huma.API) {
 		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get session summary",
 		Description: "Get details about the current authenticated session and the associated user",
-	}, auth.HandleGetSession)
+	}, HandleGetSession)
 
 	huma.Register(sessionApi, huma.Operation{
 		Path:        "/profile",
