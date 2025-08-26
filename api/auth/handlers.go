@@ -236,6 +236,17 @@ func UserAuthHandler(ctx huma.Context, next func(huma.Context)) {
 	next(ctx)
 }
 
+func CreateRequireNoUserAuthHandler(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		if HasPrincipal(ctx.Context()) {
+			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "")
+			return
+		}
+
+		next(ctx)
+	}
+}
+
 func CreateRequireUserAuthHandler(api huma.API) func(ctx huma.Context, next func(huma.Context)) {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		if !HasPrincipal(ctx.Context()) {
