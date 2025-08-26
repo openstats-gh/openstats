@@ -41,6 +41,23 @@ func SendEmailConfirmation(ctx context.Context, userEmail query.UserEmail) error
 	})
 }
 
+func SendSlugReminder(ctx context.Context, email string, slugs []string) error {
+	var listItems string
+	for _, slug := range slugs {
+		listItems += "<li>" + slug
+	}
+
+	listItems += "</li>"
+
+	body := fmt.Sprintf("Below are the slugs associated with your email. Each of these slugs can be used to sign into a different account:<br><br><ul>%s</ul>", listItems)
+	return mail.Default.Send(ctx, mail.Mail{
+		From:    "noreply@openstats.me",
+		To:      email,
+		Subject: "Your Openstats Slugs",
+		Body:    body,
+	})
+}
+
 func AddUserEmailAndSendConfirmation(ctx context.Context, userUuid uuid.UUID, email string) error {
 	userEmail, err := db.Queries.AddOrGetUserEmailByUuid(ctx, query.AddOrGetUserEmailByUuidParams{
 		UserUuid:  userUuid,

@@ -34,3 +34,9 @@ delete
 from user_email
 where user_id = @user_id and email = @email
 returning *;
+
+-- name: GetSlugsByEmail :many
+select u.slug
+from users u
+     join user_email ue on u.id = ue.user_id
+where ue.email = @email and ue.confirmed_at is not null;

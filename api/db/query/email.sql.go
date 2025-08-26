@@ -97,6 +97,33 @@ func (q *Queries) ConfirmEmail(ctx context.Context, arg ConfirmEmailParams) (Use
 	return i, err
 }
 
+const getSlugsByEmail = `-- name: GetSlugsByEmail :many
+select u.slug
+from users u
+     join user_email ue on u.id = ue.user_id
+where ue.email = $1 and ue.confirmed_at is not null
+`
+
+func (q *Queries) GetSlugsByEmail(ctx context.Context, email string) ([]string, error) {
+	rows, err := q.db.Query(ctx, getSlugsByEmail, email)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		items = append(items, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserEmail = `-- name: GetUserEmail :one
 select id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
 from user_email

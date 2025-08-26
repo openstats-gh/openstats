@@ -1,6 +1,3 @@
-
-
-TODO add forgot-slug endpoint (without session)
 TODO add forgot-password endpoint (without session)
 
 TODO use SMTP-based validation to ensure that the email is valid, before sending the email via AWS SES
@@ -16,3 +13,4 @@ DONE add resend-email-confirmation endpoint (requires session)
 DONE add change email endpoint (requires session)
 
 DONE add password reset endpoint (requires session)
+DONE add forgot-slug endpoint (without session)

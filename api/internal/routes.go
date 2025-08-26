@@ -25,164 +25,184 @@ import (
 func RegisterRoutes(api huma.API) {
 	internalApi := huma.NewGroup(api, "/internal")
 
-	requireUserAuthHandler := auth.CreateRequireUserAuthHandler(internalApi)
-	internalApi.UseSimpleModifier(func(op *huma.Operation) {
-		if _, noAuth := op.Metadata["NoUserAuth"]; !noAuth {
-			op.Security = append(op.Security, map[string][]string{"SessionCookie": {}})
-			op.Middlewares = append(op.Middlewares, auth.UserAuthHandler, requireUserAuthHandler)
-			op.Errors = append(op.Errors, http.StatusUnauthorized)
-		}
-	})
+	var sessionCookieSecurityMap = []map[string][]string{{"SessionCookie": {}}}
+	var requireUserSessionMiddlewares = huma.Middlewares{
+		auth.UserAuthHandler,
+		auth.CreateRequireUserAuthHandler(internalApi),
+	}
+	var disallowUserSessionMiddlewares = huma.Middlewares{
+		auth.UserAuthHandler,
+		auth.CreateRequireNoUserAuthHandler(internalApi),
+	}
+
+	huma.Register(internalApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/send-slug-reminder",
+		OperationID: "send-slug-reminder",
+		Summary:     "Send slug reminder",
+		Description: "Send an email to the email provided containing a list of all users associated with the email",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Tags:        []string{"Internal"},
+
+		Middlewares: disallowUserSessionMiddlewares,
+	}, HandleSendSlugReminder)
 
 	sessionApi := huma.NewGroup(internalApi, "/session")
 	sessionApi.UseSimpleModifier(func(op *huma.Operation) {
 		op.Tags = append(op.Tags, "Internal/Session")
 	})
+
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/sign-up",
 		OperationID: "sign-up",
-		Method:      http.MethodPost,
 		Errors: []int{
 			http.StatusUnauthorized,
 			http.StatusConflict,
 		},
-		Metadata:    map[string]any{"NoUserAuth": true},
 		Summary:     "Sign up",
 		Description: "Create a new user and sign into a new session as the new user",
+
+		Middlewares: disallowUserSessionMiddlewares,
 	}, HandlePostSignUp)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/sign-in",
 		OperationID: "sign-in",
-		Method:      http.MethodPost,
-		Errors:      []int{http.StatusUnauthorized},
-		Metadata:    map[string]any{"NoUserAuth": true},
 		Summary:     "Sign in",
 		Description: "Sign into a new session as an existing user",
+		Errors:      []int{http.StatusUnauthorized},
+
+		Middlewares: disallowUserSessionMiddlewares,
 	}, HandlePostSignIn)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/sign-out",
 		OperationID: "sign-out",
-		Method:      http.MethodPost,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Sign out",
 		Description: "Sign out of the current session, and invalidate the session token",
+
+		Security:    sessionCookieSecurityMap,
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSignOut)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodGet,
 		Path:        "/",
 		OperationID: "get-session",
-		Method:      http.MethodGet,
-		Errors:      []int{http.StatusUnauthorized},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get session summary",
 		Description: "Get details about the current authenticated session and the associated user",
+		Errors:      []int{http.StatusUnauthorized},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetSession)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/add-email",
 		OperationID: "add-email",
-		Method:      http.MethodPost,
-		Errors: []int{
-			http.StatusUnauthorized,
-			http.StatusConflict,
-		},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Add an email",
 		Description: "Sends a confirmation to the email; once confirmed by /confirm-email, the email will be associated with the current session's user",
+		Errors:      []int{http.StatusUnauthorized, http.StatusConflict},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleAddEmail)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/confirm-email",
 		OperationID: "confirm-email",
-		Method:      http.MethodPost,
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Confirm an email",
 		Description: "Validates an email confirmation TOTP; if successful, the email will be marked as verified",
+		Errors:      []int{http.StatusUnauthorized},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleConfirmEmail)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/remove-email",
 		OperationID: "remove-email",
-		Method:      http.MethodPost,
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Remove an email",
 		Description: "Removes one of the emails from the current session's user",
+		Errors:      []int{http.StatusUnauthorized},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleRemoveEmail)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/replace-password",
 		OperationID: "replace-password",
-		Method:      http.MethodPost,
-		Errors: []int{
-			http.StatusUnauthorized,
-		},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Change user's password",
 		Description: "Changes the current session user's password",
+		Errors:      []int{http.StatusUnauthorized},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleChangePassword)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodGet,
 		Path:        "/profile",
 		OperationID: "get-session-profile",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get user's profile",
 		Description: "Get profile of current authenticated user",
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetSessionProfile)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/profile",
 		OperationID: "update-session-profile",
-		Method:      http.MethodPost,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Update user's profile",
 		Description: "Update profile of current authenticated user",
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSessionProfile)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/profile/avatar",
 		OperationID: "update-session-avatar",
-		Method:      http.MethodPost,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler},
 		Summary:     "Update user's avatar",
 		Description: "Update avatar of current authenticated user",
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSessionAvatar)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodGet,
 		Path:        "/tokens",
 		OperationID: "get-game-tokens",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get user's tokens",
 		Description: "Get all of the current user's tokens",
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetSessionGameTokens)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodPost,
 		Path:        "/tokens",
 		OperationID: "create-game-token",
-		Method:      http.MethodPost,
-		Errors:      []int{http.StatusBadRequest},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Create a new token",
 		Description: "Create a new token for the current user",
+		Errors:      []int{http.StatusBadRequest},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSessionGameToken)
 
 	huma.Register(sessionApi, huma.Operation{
+		Method:      http.MethodDelete,
 		Path:        "/tokens/{tokenRID}",
 		OperationID: "delete-game-token",
-		Method:      http.MethodDelete,
-		Errors:      []int{http.StatusBadRequest},
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Invalidate a token",
 		Description: "Invalidate one of the current user's tokens",
+		Errors:      []int{http.StatusBadRequest},
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleDeleteSessionGameToken)
 
 	userApi := huma.NewGroup(internalApi, "/users/v1")
@@ -190,21 +210,23 @@ func RegisterRoutes(api huma.API) {
 		op.Tags = append(op.Tags, "Internal/Users")
 	})
 	huma.Register(userApi, huma.Operation{
+		Method:      http.MethodGet,
 		Path:        "/",
 		OperationID: "search-users",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Search users",
 		Description: "Search all users by various criteria",
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleSearchUsers)
 
 	huma.Register(userApi, huma.Operation{
+		Method:      http.MethodGet,
 		Path:        "/{user}/profile",
 		OperationID: "get-user-profile",
-		Method:      http.MethodGet,
-		Middlewares: huma.Middlewares{auth.UserAuthHandler, requireUserAuthHandler}, // TODO: https://github.com/danielgtaylor/huma/issues/804
 		Summary:     "Get a user's profile",
 		Description: "Get a user's displayable profile",
+
+		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetUserProfile)
 }
 
