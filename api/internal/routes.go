@@ -45,7 +45,7 @@ func RegisterRoutes(api huma.API) {
 		Tags:        []string{"Internal"},
 
 		Middlewares: disallowUserSessionMiddlewares,
-	}, HandleForgotSlugs)
+	}, HandleSendSlugReminder)
 
 	sessionApi := huma.NewGroup(internalApi, "/session")
 	sessionApi.UseSimpleModifier(func(op *huma.Operation) {
