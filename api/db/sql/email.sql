@@ -1,24 +1,17 @@
 -- name: AddOrGetUserEmail :one
-insert into user_email (user_id, email, otp_secret)
-values (@user_id, @email, @otp_secret)
+insert into user_email(user_id, email)
+values (@user_id, @email)
 on conflict (user_email_unique_idx) do nothing
 returning *;
 
--- name: AddOrGetUserEmailByUuid :one
+-- name: AddUserEmailByUuid :exec
 with target_user as (
     select u.id from users u where u.uuid = @user_uuid
 )
-insert into user_email (user_id, email, otp_secret)
-select tu.id, @email, @otp_secret from target_user tu
-on conflict (user_email_unique_idx) do nothing
-returning *;
+insert into user_email(user_id, email)
+select tu.id, @email from target_user tu;
 
 -- name: GetUserEmail :one
-select *
-from user_email
-where user_id = @user_id and email = @email;
-
--- name: GetUserEmails :many
 select *
 from user_email
 where user_id = @user_id;

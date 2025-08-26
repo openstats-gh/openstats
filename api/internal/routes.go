@@ -7,6 +7,7 @@ import (
 	"errors"
 	"image/png"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/buckket/go-blurhash"
@@ -245,8 +246,32 @@ func HandleAddEmail(ctx context.Context, input *SendEmailConfInput) (output *Sen
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
-	if err = AddUserEmailAndSendConfirmation(ctx, principal.User.Uuid, input.Body.Email); err != nil {
-		return nil, eris.Wrap(err, "error adding user email")
+	var userEmail query.UserEmail
+	userEmail, err = db.Queries.AddOrGetUserEmail(ctx, query.AddOrGetUserEmailParams{
+		UserID: principal.User.ID,
+		Email:  input.Body.Email,
+	})
+	if err != nil {
+		return
+	}
+
+	if userEmail.ConfirmedAt.Valid || userEmail.Email != input.Body.Email {
+		return nil, huma.Error409Conflict("email already associated with this user")
+	}
+
+	var hmacSecret string
+	hmacSecret, err = db.Queries.SecretRead(ctx, query.SecretReadParams{
+		Path: db.PrivateUser2faHmacSecretPath,
+		Key:  strconv.FormatInt(int64(principal.User.ID), 10),
+	})
+
+	if err != nil {
+		return nil, eris.Wrap(err, "there was an error creating your 2FA TOTP code")
+	}
+
+	err = SendEmailConfirmation(ctx, hmacSecret, userEmail.Email)
+	if err != nil {
+		return nil, eris.Wrap(err, "there was an error sending your 2FA TOTP code")
 	}
 
 	return &SendEmailConfOutput{}, nil
@@ -421,17 +446,15 @@ func HandlePostSessionProfile(ctx context.Context, input *PostSessionRequest) (*
 		// TODO: BioText
 	})
 
-	if errors.Is(updateErr, db.ErrSlugAlreadyInUse) {
+	if db.IsUniqueConstraintErr(updateErr) {
 		//return nil, &ConflictSignUpSlug{
 		//	Location: "body.slug",
 		//	Slug:     registerBody.Slug,
 		//}
 		return nil, huma.Error409Conflict("that slug is already in use")
-	} else if updateErr != nil {
-		return nil, updateErr
 	}
 
-	return nil, nil
+	return nil, updateErr
 }
 
 type PostAvatarInput struct {

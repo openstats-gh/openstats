@@ -139,7 +139,7 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 
 	emailSent := false
 	if len(registerBody.Body.Email) > 0 {
-		emailErr := SendEmailConfirmation(ctx, createdUser.Email)
+		emailErr := SendEmailConfirmation(ctx, createdUser.HmacSecret, registerBody.Body.Email)
 		emailSent = emailErr == nil
 	}
 

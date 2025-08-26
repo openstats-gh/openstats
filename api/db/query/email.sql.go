@@ -12,20 +12,19 @@ import (
 )
 
 const addOrGetUserEmail = `-- name: AddOrGetUserEmail :one
-insert into user_email (user_id, email, otp_secret)
-values ($1, $2, $3)
+insert into user_email(user_id, email)
+values ($1, $2)
 on conflict (user_email_unique_idx) do nothing
-returning id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
+returning id, created_at, updated_at, user_id, email, confirmed_at
 `
 
 type AddOrGetUserEmailParams struct {
-	UserID    int32
-	Email     string
-	OtpSecret string
+	UserID int32
+	Email  string
 }
 
 func (q *Queries) AddOrGetUserEmail(ctx context.Context, arg AddOrGetUserEmailParams) (UserEmail, error) {
-	row := q.db.QueryRow(ctx, addOrGetUserEmail, arg.UserID, arg.Email, arg.OtpSecret)
+	row := q.db.QueryRow(ctx, addOrGetUserEmail, arg.UserID, arg.Email)
 	var i UserEmail
 	err := row.Scan(
 		&i.ID,
@@ -34,47 +33,33 @@ func (q *Queries) AddOrGetUserEmail(ctx context.Context, arg AddOrGetUserEmailPa
 		&i.UserID,
 		&i.Email,
 		&i.ConfirmedAt,
-		&i.OtpSecret,
 	)
 	return i, err
 }
 
-const addOrGetUserEmailByUuid = `-- name: AddOrGetUserEmailByUuid :one
+const addUserEmailByUuid = `-- name: AddUserEmailByUuid :exec
 with target_user as (
-    select u.id from users u where u.uuid = $3
+    select u.id from users u where u.uuid = $2
 )
-insert into user_email (user_id, email, otp_secret)
-select tu.id, $1, $2 from target_user tu
-on conflict (user_email_unique_idx) do nothing
-returning id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
+insert into user_email(user_id, email)
+select tu.id, $1 from target_user tu
 `
 
-type AddOrGetUserEmailByUuidParams struct {
-	Email     string
-	OtpSecret string
-	UserUuid  uuid.UUID
+type AddUserEmailByUuidParams struct {
+	Email    string
+	UserUuid uuid.UUID
 }
 
-func (q *Queries) AddOrGetUserEmailByUuid(ctx context.Context, arg AddOrGetUserEmailByUuidParams) (UserEmail, error) {
-	row := q.db.QueryRow(ctx, addOrGetUserEmailByUuid, arg.Email, arg.OtpSecret, arg.UserUuid)
-	var i UserEmail
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.UserID,
-		&i.Email,
-		&i.ConfirmedAt,
-		&i.OtpSecret,
-	)
-	return i, err
+func (q *Queries) AddUserEmailByUuid(ctx context.Context, arg AddUserEmailByUuidParams) error {
+	_, err := q.db.Exec(ctx, addUserEmailByUuid, arg.Email, arg.UserUuid)
+	return err
 }
 
 const confirmEmail = `-- name: ConfirmEmail :one
 update user_email
 set confirmed_at = now()
 where user_id = $1 and email = $2
-returning id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
+returning id, created_at, updated_at, user_id, email, confirmed_at
 `
 
 type ConfirmEmailParams struct {
@@ -92,7 +77,6 @@ func (q *Queries) ConfirmEmail(ctx context.Context, arg ConfirmEmailParams) (Use
 		&i.UserID,
 		&i.Email,
 		&i.ConfirmedAt,
-		&i.OtpSecret,
 	)
 	return i, err
 }
@@ -125,18 +109,13 @@ func (q *Queries) GetSlugsByEmail(ctx context.Context, email string) ([]string, 
 }
 
 const getUserEmail = `-- name: GetUserEmail :one
-select id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
+select id, created_at, updated_at, user_id, email, confirmed_at
 from user_email
-where user_id = $1 and email = $2
+where user_id = $1
 `
 
-type GetUserEmailParams struct {
-	UserID int32
-	Email  string
-}
-
-func (q *Queries) GetUserEmail(ctx context.Context, arg GetUserEmailParams) (UserEmail, error) {
-	row := q.db.QueryRow(ctx, getUserEmail, arg.UserID, arg.Email)
+func (q *Queries) GetUserEmail(ctx context.Context, userID int32) (UserEmail, error) {
+	row := q.db.QueryRow(ctx, getUserEmail, userID)
 	var i UserEmail
 	err := row.Scan(
 		&i.ID,
@@ -145,50 +124,15 @@ func (q *Queries) GetUserEmail(ctx context.Context, arg GetUserEmailParams) (Use
 		&i.UserID,
 		&i.Email,
 		&i.ConfirmedAt,
-		&i.OtpSecret,
 	)
 	return i, err
-}
-
-const getUserEmails = `-- name: GetUserEmails :many
-select id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
-from user_email
-where user_id = $1
-`
-
-func (q *Queries) GetUserEmails(ctx context.Context, userID int32) ([]UserEmail, error) {
-	rows, err := q.db.Query(ctx, getUserEmails, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []UserEmail
-	for rows.Next() {
-		var i UserEmail
-		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.UserID,
-			&i.Email,
-			&i.ConfirmedAt,
-			&i.OtpSecret,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const removeEmail = `-- name: RemoveEmail :one
 delete
 from user_email
 where user_id = $1 and email = $2
-returning id, created_at, updated_at, user_id, email, confirmed_at, otp_secret
+returning id, created_at, updated_at, user_id, email, confirmed_at
 `
 
 type RemoveEmailParams struct {
@@ -206,7 +150,6 @@ func (q *Queries) RemoveEmail(ctx context.Context, arg RemoveEmailParams) (UserE
 		&i.UserID,
 		&i.Email,
 		&i.ConfirmedAt,
-		&i.OtpSecret,
 	)
 	return i, err
 }
