@@ -35,6 +35,18 @@ func RegisterRoutes(api huma.API) {
 		auth.CreateRequireNoUserAuthHandler(internalApi),
 	}
 
+	huma.Register(internalApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/send-slug-reminder",
+		OperationID: "send-slug-reminder",
+		Summary:     "Send slug reminder",
+		Description: "Send an email to the email provided containing a list of all users associated with the email",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Tags:        []string{"Internal"},
+
+		Middlewares: disallowUserSessionMiddlewares,
+	}, HandleForgotSlugs)
+
 	sessionApi := huma.NewGroup(internalApi, "/session")
 	sessionApi.UseSimpleModifier(func(op *huma.Operation) {
 		op.Tags = append(op.Tags, "Internal/Session")
