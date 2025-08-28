@@ -60,9 +60,8 @@ const (
 
 func Send2faTotpEmail(ctx context.Context, purpose TotpPurpose, slug, otpSecret, email string) error {
 	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), auth.ValidateOptions)
-
 	if totpErr != nil {
-		return totpErr
+		return eris.Wrap(totpErr, "error generating custom totp code")
 	}
 
 	confBody := fmt.Sprintf(

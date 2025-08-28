@@ -10,6 +10,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/env"
+	"github.com/dresswithpockets/openstats/app/log"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/rotisserie/eris"
@@ -163,7 +164,10 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 
 	emailSent := false
 	if len(registerBody.Body.Email) > 0 {
-		emailErr := SendEmailConfirmation(ctx, createdUser.HmacSecret, registerBody.Body.Email)
+		emailErr := Send2faTotpEmail(ctx, EmailConfirmationPurpose, createdUser.User.Slug, createdUser.HmacSecret, registerBody.Body.Email)
+		// we log this error instead of returning it since we want a success response even if the email failed to send.
+		// n.b. the user can always request the code again later
+		log.Logger.Error("there was an error sending the 2FA TOTP Email", "error", emailErr)
 		emailSent = emailErr == nil
 	}
 

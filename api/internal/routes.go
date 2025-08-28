@@ -293,9 +293,9 @@ func HandleAddEmail(ctx context.Context, input *SendEmailConfInput) (output *Sen
 		return nil, eris.Wrap(err, "there was an error creating your 2FA TOTP code")
 	}
 
-	err = SendEmailConfirmation(ctx, hmacSecret, userEmail.Email)
+	err = Send2faTotpEmail(ctx, EmailConfirmationPurpose, principal.User.Slug, hmacSecret, userEmail.Email)
 	if err != nil {
-		return nil, eris.Wrap(err, "there was an error sending your 2FA TOTP code")
+		return nil, err
 	}
 
 	return &SendEmailConfOutput{}, nil
