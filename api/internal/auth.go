@@ -10,6 +10,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/env"
+	"github.com/dresswithpockets/openstats/app/log"
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/rotisserie/eris"
@@ -66,6 +67,30 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInRes
 			SameSite: http.SameSiteStrictMode,
 		},
 	}, nil
+}
+
+type ResetPasswordInput struct {
+	Body struct {
+		Slug string `json:"slug"`
+		Code string `json:"code"`
+
+		// Password is the user's login password
+		Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	}
+}
+type ResetPasswordOutput struct{}
+
+func HandleResetPassword(ctx context.Context, input *ResetPasswordInput) (*ResetPasswordOutput, error) {
+	user, err := db.Queries.FindUserBySlug(ctx, input.Body.Slug)
+	if err != nil {
+		return nil, huma.Error404NotFound("mismatched code or slug")
+	}
+
+	if err = auth.ReplaceUserPasswordWithTotpValidation(ctx, user.ID, input.Body.Code, input.Body.Password); err != nil {
+		return nil, huma.Error404NotFound("mismatched code or slug")
+	}
+
+	return &ResetPasswordOutput{}, nil
 }
 
 type ConflictSignUpSlug struct {
@@ -139,7 +164,10 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 
 	emailSent := false
 	if len(registerBody.Body.Email) > 0 {
-		emailErr := SendEmailConfirmation(ctx, createdUser.Email)
+		emailErr := Send2faTotpEmail(ctx, EmailConfirmationPurpose, createdUser.User.Slug, createdUser.HmacSecret, registerBody.Body.Email)
+		// we log this error instead of returning it since we want a success response even if the email failed to send.
+		// n.b. the user can always request the code again later
+		log.Logger.Error("there was an error sending the 2FA TOTP Email", "error", emailErr)
 		emailSent = emailErr == nil
 	}
 
@@ -171,7 +199,7 @@ type SignOutResponse struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
 }
 
-func HandlePostSignOut(ctx context.Context, input *struct{}) (*SignOutResponse, error) {
+func HandlePostSignOut(ctx context.Context, _ *struct{}) (*SignOutResponse, error) {
 	if principal, ok := auth.GetPrincipal(ctx); ok {
 		err := db.Queries.DisallowToken(ctx, principal.TokenID)
 		if err != nil {
@@ -202,7 +230,7 @@ type SessionResponse struct {
 	Body SessionResponseBody
 }
 
-func HandleGetSession(ctx context.Context, input *struct{}) (*SessionResponse, error) {
+func HandleGetSession(ctx context.Context, _ *struct{}) (*SessionResponse, error) {
 	principal, hasPrincipal := auth.GetPrincipal(ctx)
 	if !hasPrincipal {
 		return nil, huma.Error401Unauthorized("no session")

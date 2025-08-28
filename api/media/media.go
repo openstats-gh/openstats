@@ -56,10 +56,11 @@ type AvatarOutput struct {
 	Body []byte
 }
 
-func getAvatar(ctx context.Context, input *AvatarInput) (output *AvatarOutput, err error) {
+func getAvatar(_ context.Context, input *AvatarInput) (output *AvatarOutput, err error) {
 	filePath := fmt.Sprintf("avatars/%s/%s.png", input.Group, input.Avatar)
 
 	var fileBytes []byte
+	// TODO: shouldn't this require a context?
 	fileBytes, err = afero.ReadFile(mediaFs, filePath)
 	if err != nil {
 		return

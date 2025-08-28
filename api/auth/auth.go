@@ -10,7 +10,9 @@ import (
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 	"github.com/rotisserie/eris"
+	"strconv"
 	"time"
 )
 
@@ -104,6 +106,42 @@ func AddNewUser(ctx context.Context, displayName, email, slug, pass string) (new
 	}
 
 	return db.DB.CreateUser(ctx, slug, encodedPassword, email, displayName)
+}
+
+func ReplaceUserPasswordWithTotpValidation(ctx context.Context, userId int32, otp, newPassword string) error {
+	if !validation.ValidPassword(newPassword) {
+		return eris.Wrap(ErrInvalidPassword, "validation error")
+	}
+
+	return db.DB.Transact(ctx, func(ctx context.Context, qtx *query.Queries) error {
+		hmacSecret, dbErr := db.Queries.SecretRead(ctx, query.SecretReadParams{
+			Path: db.PrivateUser2faHmacSecretPath,
+			Key:  strconv.FormatInt(int64(userId), 10),
+		})
+
+		if dbErr != nil {
+			return eris.Wrap(dbErr, "error getting user hmac secret")
+		}
+
+		validated, validateErr := totp.ValidateCustom(otp, hmacSecret, time.Now(), ValidateOptions)
+		if validateErr != nil {
+			return eris.Wrap(validateErr, "error validating OTP")
+		}
+
+		if !validated {
+			return eris.Wrap(validateErr, "couldn't validate OTP")
+		}
+
+		encodedHash, passwordErr := password.EncodePassword(newPassword, ArgonParameters)
+		if passwordErr != nil {
+			return passwordErr
+		}
+
+		return qtx.ReplacePassword(ctx, query.ReplacePasswordParams{
+			UserID:      userId,
+			EncodedHash: encodedHash,
+		})
+	})
 }
 
 func ReplaceUserPassword(ctx context.Context, userId int32, oldPassword, newPassword string) error {

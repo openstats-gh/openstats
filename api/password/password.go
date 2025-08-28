@@ -14,7 +14,6 @@ import (
 var (
 	ErrInvalidHash                = eris.New("the encoded hash is not in the correct format")
 	ErrIncompatibleImplementation = eris.New("implementation is not argon2id")
-	ErrCantDecodeVersion          = eris.New("can't decode the argon2id version")
 	ErrIncompatibleVersion        = eris.New("incompatible version of argon2")
 	ErrMissingParameters          = eris.New("missing a parameter")
 	ErrHashMismatch               = eris.New("the password does not match the encoded hash")

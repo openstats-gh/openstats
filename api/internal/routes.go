@@ -7,6 +7,7 @@ import (
 	"errors"
 	"image/png"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/buckket/go-blurhash"
@@ -46,6 +47,30 @@ func RegisterRoutes(api huma.API) {
 
 		Middlewares: disallowUserSessionMiddlewares,
 	}, HandleSendSlugReminder)
+
+	huma.Register(internalApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/send-password-reset",
+		OperationID: "send-password-reset",
+		Summary:     "Send password reset",
+		Description: "Send a 2FA TOTP code to the email associated with the slug, to use with /reset-password",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Tags:        []string{"Internal"},
+
+		Middlewares: disallowUserSessionMiddlewares,
+	}, HandleSendPasswordReset)
+
+	huma.Register(internalApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/reset-password",
+		OperationID: "reset-password",
+		Summary:     "Reset password",
+		Description: "Given a 2FA TOTP code, changes the user's password and signs them into their account",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Tags:        []string{"Internal"},
+
+		Middlewares: disallowUserSessionMiddlewares,
+	}, HandleResetPassword)
 
 	sessionApi := huma.NewGroup(internalApi, "/session")
 	sessionApi.UseSimpleModifier(func(op *huma.Operation) {
@@ -126,8 +151,8 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/remove-email",
 		OperationID: "remove-email",
 		Summary:     "Remove an email",
-		Description: "Removes one of the emails from the current session's user",
-		Errors:      []int{http.StatusUnauthorized},
+		Description: "Un-associated the current user's email",
+		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound},
 
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleRemoveEmail)
@@ -245,8 +270,32 @@ func HandleAddEmail(ctx context.Context, input *SendEmailConfInput) (output *Sen
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
-	if err = AddUserEmailAndSendConfirmation(ctx, principal.User.Uuid, input.Body.Email); err != nil {
-		return nil, eris.Wrap(err, "error adding user email")
+	var userEmail query.UserEmail
+	userEmail, err = db.Queries.AddOrGetUserEmail(ctx, query.AddOrGetUserEmailParams{
+		UserID: principal.User.ID,
+		Email:  input.Body.Email,
+	})
+	if err != nil {
+		return
+	}
+
+	if userEmail.ConfirmedAt.Valid || userEmail.Email != input.Body.Email {
+		return nil, huma.Error409Conflict("email already associated with this user")
+	}
+
+	var hmacSecret string
+	hmacSecret, err = db.Queries.SecretRead(ctx, query.SecretReadParams{
+		Path: db.PrivateUser2faHmacSecretPath,
+		Key:  strconv.FormatInt(int64(principal.User.ID), 10),
+	})
+
+	if err != nil {
+		return nil, eris.Wrap(err, "there was an error creating your 2FA TOTP code")
+	}
+
+	err = Send2faTotpEmail(ctx, EmailConfirmationPurpose, principal.User.Slug, hmacSecret, userEmail.Email)
+	if err != nil {
+		return nil, err
 	}
 
 	return &SendEmailConfOutput{}, nil
@@ -295,6 +344,7 @@ func HandleRemoveEmail(ctx context.Context, input *RemoveEmailInput) (output *Re
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
+	// TODO: require 2FA TOTP verification for email removal
 	_, err = db.Queries.RemoveEmail(ctx, query.RemoveEmailParams{
 		UserID: principal.User.ID,
 		Email:  input.Body.Email,
@@ -386,7 +436,7 @@ type GetSessionResponse struct {
 	Body UserProfile
 }
 
-func HandleGetSessionProfile(ctx context.Context, input *struct{}) (*GetSessionResponse, error) {
+func HandleGetSessionProfile(ctx context.Context, _ *struct{}) (*GetSessionResponse, error) {
 	principal, hasPrincipal := auth.GetPrincipal(ctx)
 	if !hasPrincipal {
 		// shouldn't ever get here due to middleware check
@@ -421,17 +471,15 @@ func HandlePostSessionProfile(ctx context.Context, input *PostSessionRequest) (*
 		// TODO: BioText
 	})
 
-	if errors.Is(updateErr, db.ErrSlugAlreadyInUse) {
+	if db.IsUniqueConstraintErr(updateErr) {
 		//return nil, &ConflictSignUpSlug{
 		//	Location: "body.slug",
 		//	Slug:     registerBody.Slug,
 		//}
 		return nil, huma.Error409Conflict("that slug is already in use")
-	} else if updateErr != nil {
-		return nil, updateErr
 	}
 
-	return nil, nil
+	return nil, updateErr
 }
 
 type PostAvatarInput struct {
@@ -531,7 +579,7 @@ type GetSessionGameTokensResponse struct {
 	Body GameTokenList
 }
 
-func HandleGetSessionGameTokens(ctx context.Context, input *struct{}) (*GetSessionGameTokensResponse, error) {
+func HandleGetSessionGameTokens(ctx context.Context, _ *struct{}) (*GetSessionGameTokensResponse, error) {
 	principal, hasPrincipal := auth.GetPrincipal(ctx)
 	if !hasPrincipal {
 		// shouldn't ever get here due to middleware check

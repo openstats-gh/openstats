@@ -24,7 +24,7 @@ var unixEpochSchema = &huma.Schema{
 }
 
 //goland:noinspection GoMixedReceiverTypes
-func (u EpochTime) Schema(r huma.Registry) *huma.Schema {
+func (u EpochTime) Schema(_ huma.Registry) *huma.Schema {
 	return unixEpochSchema
 }
 
@@ -91,7 +91,7 @@ func (o *Optional[T]) Receiver() reflect.Value {
 	return reflect.ValueOf(o).Elem().Field(0)
 }
 
-func (o *Optional[T]) OnParamSet(isSet bool, parsed any) {
+func (o *Optional[T]) OnParamSet(isSet bool, _ any) {
 	o.HasValue = isSet
 }
 
@@ -114,7 +114,7 @@ type SlugOrRID struct {
 	rid  rid.RID `hidden:"true"`
 }
 
-func (s *SlugOrRID) Schema(r huma.Registry) *huma.Schema {
+func (s *SlugOrRID) Schema(_ huma.Registry) *huma.Schema {
 	return &huma.Schema{
 		Type:        "string",
 		Title:       "Resource Matcher",

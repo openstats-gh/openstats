@@ -13,8 +13,11 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rotisserie/eris"
+	"strconv"
 	"time"
 )
+
+var PrivateUser2faHmacSecretPath = "private.user.2fa-hmac"
 
 var ErrSlugAlreadyInUse = eris.New("slug already in use")
 
@@ -71,8 +74,8 @@ func (a *Actions) ScanRow(ctx context.Context, sqlizer squirrel.Sqlizer, dest ..
 }
 
 type CreatedUser struct {
-	User  query.User
-	Email query.UserEmail
+	User       query.User
+	HmacSecret string
 }
 
 func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, email, displayName string) (*CreatedUser, error) {
@@ -86,7 +89,9 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 
 	qtx := a.queries.WithTx(tx)
 
-	var createdUser CreatedUser
+	createdUser := &CreatedUser{
+		HmacSecret: rand.Text(),
+	}
 	createdUser.User, err = qtx.AddUser(ctx, slug)
 	if IsUniqueConstraintErr(err) {
 		return nil, ErrSlugAlreadyInUse
@@ -110,11 +115,19 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 		return nil, eris.Wrap(err, "error adding user password")
 	}
 
+	// this secret is used for TOTP 2FA when verifying
+	if err = qtx.SecretWrite(ctx, query.SecretWriteParams{
+		Path:  PrivateUser2faHmacSecretPath,
+		Key:   strconv.FormatInt(int64(createdUser.User.ID), 10),
+		Value: createdUser.HmacSecret,
+	}); err != nil {
+		return nil, eris.Wrap(err, "error adding user secret")
+	}
+
 	if len(email) > 0 {
-		createdUser.Email, err = qtx.AddOrGetUserEmail(ctx, query.AddOrGetUserEmailParams{
-			UserID:    createdUser.User.ID,
-			Email:     email,
-			OtpSecret: rand.Text(),
+		_, err = qtx.AddOrGetUserEmail(ctx, query.AddOrGetUserEmailParams{
+			UserID: createdUser.User.ID,
+			Email:  email,
 		})
 		if err != nil {
 			return nil, eris.Wrap(err, "error adding user email")
@@ -134,7 +147,7 @@ func (a *Actions) CreateUser(ctx context.Context, slug, encodedPasswordHash, ema
 		return nil, eris.Wrap(err, "error committing transaction")
 	}
 
-	return &createdUser, nil
+	return createdUser, nil
 }
 
 func (a *Actions) CreateGameSessionAndToken(

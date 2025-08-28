@@ -120,6 +120,13 @@ type GameToken struct {
 	GameID    int32
 }
 
+type Secret struct {
+	ID    int32
+	Path  string
+	Key   string
+	Value string
+}
+
 type Token struct {
 	ID        uuid.UUID
 	Issuer    string
@@ -166,7 +173,6 @@ type UserEmail struct {
 	UserID      int32
 	Email       string
 	ConfirmedAt pgtype.Timestamptz
-	OtpSecret   string
 }
 
 type UserLatestDisplayName struct {
