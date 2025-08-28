@@ -57,6 +57,41 @@ func SendSlugReminder(ctx context.Context, email string, slugs []string) error {
 	})
 }
 
+type TotpPurpose int
+
+const (
+	PasswordResetPurpose TotpPurpose = iota
+	EmailConfirmationPurpose
+)
+
+func Send2faTotpEmail(ctx context.Context, purpose TotpPurpose, slug, otpSecret, email string) error {
+	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), ValidateOptions)
+
+	if totpErr != nil {
+		return totpErr
+	}
+
+	confBody := fmt.Sprintf(
+		"Hi %s,<br/><br/>"+
+			"A security code was requested for for your account. This code can be used to gain control to your account, DO NOT SHARE THIS CODE WITH OTHERS.<br/><br/>"+
+			"Code: %s", slug, totpCode)
+
+	subject := "Your Openstats Code"
+	switch purpose {
+	case PasswordResetPurpose:
+		subject = "Your Openstats Password Reset Code"
+	case EmailConfirmationPurpose:
+		subject = "Your Openstats Email Confirmation Code"
+	}
+
+	return mail.Default.Send(ctx, mail.Mail{
+		From:    "noreply@openstats.me",
+		To:      email,
+		Subject: subject,
+		Body:    confBody,
+	})
+}
+
 func ValidateUserEmail(ctx context.Context, userId int32, email, passcode string) (bool, error) {
 	dbUserEmail, dbErr := db.Queries.GetUserEmail(ctx, userId)
 

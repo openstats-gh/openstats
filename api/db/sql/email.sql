@@ -33,3 +33,9 @@ select u.slug
 from users u
      join user_email ue on u.id = ue.user_id
 where ue.email = @email and ue.confirmed_at is not null;
+
+-- name: FindUserEmailBySlug :one
+select ue.user_id, ue.email
+from user_email ue
+     join users u on ue.user_id = u.id
+where u.slug = @slug and ue.confirmed_at is not null;

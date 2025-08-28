@@ -81,6 +81,25 @@ func (q *Queries) ConfirmEmail(ctx context.Context, arg ConfirmEmailParams) (Use
 	return i, err
 }
 
+const findUserEmailBySlug = `-- name: FindUserEmailBySlug :one
+select ue.user_id, ue.email
+from user_email ue
+     join users u on ue.user_id = u.id
+where u.slug = $1 and ue.confirmed_at is not null
+`
+
+type FindUserEmailBySlugRow struct {
+	UserID int32
+	Email  string
+}
+
+func (q *Queries) FindUserEmailBySlug(ctx context.Context, slug string) (FindUserEmailBySlugRow, error) {
+	row := q.db.QueryRow(ctx, findUserEmailBySlug, slug)
+	var i FindUserEmailBySlugRow
+	err := row.Scan(&i.UserID, &i.Email)
+	return i, err
+}
+
 const getSlugsByEmail = `-- name: GetSlugsByEmail :many
 select u.slug
 from users u

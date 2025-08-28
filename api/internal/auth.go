@@ -68,6 +68,21 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInRes
 	}, nil
 }
 
+type ResetPasswordInput struct {
+	Body struct {
+		Slug string `json:"slug"`
+		Code string `json:"code"`
+
+		// Password is the user's login password
+		Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+	}
+}
+type ResetPasswordOutput struct{}
+
+func HandleResetPassword(ctx context.Context, input *ResetPasswordInput) (*ResetPasswordOutput, error) {
+	panic("implement me")
+}
+
 type ConflictSignUpSlug struct {
 	Location string
 	Slug     string

@@ -48,6 +48,30 @@ func RegisterRoutes(api huma.API) {
 		Middlewares: disallowUserSessionMiddlewares,
 	}, HandleSendSlugReminder)
 
+	huma.Register(internalApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/send-password-reset",
+		OperationID: "send-password-reset",
+		Summary:     "Send password reset",
+		Description: "Send a 2FA TOTP code to the email associated with the slug, to use with /reset-password",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Tags:        []string{"Internal"},
+
+		Middlewares: disallowUserSessionMiddlewares,
+	}, HandleSendPasswordReset)
+
+	huma.Register(internalApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/reset-password",
+		OperationID: "reset-password",
+		Summary:     "Reset password",
+		Description: "Given a 2FA TOTP code, changes the user's password and signs them into their account",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Tags:        []string{"Internal"},
+
+		Middlewares: disallowUserSessionMiddlewares,
+	}, HandleResetPassword)
+
 	sessionApi := huma.NewGroup(internalApi, "/session")
 	sessionApi.UseSimpleModifier(func(op *huma.Operation) {
 		op.Tags = append(op.Tags, "Internal/Session")
