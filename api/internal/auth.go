@@ -199,7 +199,7 @@ type SignOutResponse struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
 }
 
-func HandlePostSignOut(ctx context.Context, input *struct{}) (*SignOutResponse, error) {
+func HandlePostSignOut(ctx context.Context, _ *struct{}) (*SignOutResponse, error) {
 	if principal, ok := auth.GetPrincipal(ctx); ok {
 		err := db.Queries.DisallowToken(ctx, principal.TokenID)
 		if err != nil {
@@ -230,7 +230,7 @@ type SessionResponse struct {
 	Body SessionResponseBody
 }
 
-func HandleGetSession(ctx context.Context, input *struct{}) (*SessionResponse, error) {
+func HandleGetSession(ctx context.Context, _ *struct{}) (*SessionResponse, error) {
 	principal, hasPrincipal := auth.GetPrincipal(ctx)
 	if !hasPrincipal {
 		return nil, huma.Error401Unauthorized("no session")

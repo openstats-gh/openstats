@@ -6,33 +6,12 @@ import (
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
-	"github.com/dresswithpockets/openstats/app/env"
 	"github.com/dresswithpockets/openstats/app/mail"
 	"github.com/pquerna/otp/totp"
 	"github.com/rotisserie/eris"
-	"net/url"
 	"strconv"
 	"time"
 )
-
-func SendEmailConfirmation(ctx context.Context, otpSecret, email string) error {
-	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), auth.ValidateOptions)
-
-	if totpErr != nil {
-		return totpErr
-	}
-
-	appBaseUrl := env.GetString("OPENSTATS_APP_BASEURL")
-	confUrl := fmt.Sprintf("%s/confirm-email?e=%s&c=%s", appBaseUrl, url.QueryEscape(email), url.QueryEscape(totpCode))
-	confBody := fmt.Sprintf("Confirm adding your email address to your Openstats account by clicking on the link below.<br/></br><a href=\"%s\">%s</a>", confUrl, confUrl)
-
-	return mail.Default.Send(ctx, mail.Mail{
-		From:    "noreply@openstats.me",
-		To:      email,
-		Subject: "Openstats Confirmation",
-		Body:    confBody,
-	})
-}
 
 func SendSlugReminder(ctx context.Context, email string, slugs []string) error {
 	var listItems string

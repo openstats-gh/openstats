@@ -24,7 +24,7 @@ type RID struct {
 	ID     uuid.UUID
 }
 
-func (R *RID) Schema(r huma.Registry) *huma.Schema {
+func (R *RID) Schema(_ huma.Registry) *huma.Schema {
 	return &huma.Schema{
 		Type:        "string",
 		Title:       "RID",

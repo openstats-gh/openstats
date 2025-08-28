@@ -436,7 +436,7 @@ type GetSessionResponse struct {
 	Body UserProfile
 }
 
-func HandleGetSessionProfile(ctx context.Context, input *struct{}) (*GetSessionResponse, error) {
+func HandleGetSessionProfile(ctx context.Context, _ *struct{}) (*GetSessionResponse, error) {
 	principal, hasPrincipal := auth.GetPrincipal(ctx)
 	if !hasPrincipal {
 		// shouldn't ever get here due to middleware check
@@ -579,7 +579,7 @@ type GetSessionGameTokensResponse struct {
 	Body GameTokenList
 }
 
-func HandleGetSessionGameTokens(ctx context.Context, input *struct{}) (*GetSessionGameTokensResponse, error) {
+func HandleGetSessionGameTokens(ctx context.Context, _ *struct{}) (*GetSessionGameTokensResponse, error) {
 	principal, hasPrincipal := auth.GetPrincipal(ctx)
 	if !hasPrincipal {
 		// shouldn't ever get here due to middleware check
