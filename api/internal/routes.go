@@ -151,8 +151,8 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/remove-email",
 		OperationID: "remove-email",
 		Summary:     "Remove an email",
-		Description: "Removes one of the emails from the current session's user",
-		Errors:      []int{http.StatusUnauthorized},
+		Description: "Un-associated the current user's email",
+		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound},
 
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleRemoveEmail)
@@ -344,6 +344,7 @@ func HandleRemoveEmail(ctx context.Context, input *RemoveEmailInput) (output *Re
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
+	// TODO: require 2FA TOTP verification for email removal
 	_, err = db.Queries.RemoveEmail(ctx, query.RemoveEmailParams{
 		UserID: principal.User.ID,
 		Email:  input.Body.Email,
