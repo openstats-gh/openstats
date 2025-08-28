@@ -80,7 +80,16 @@ type ResetPasswordInput struct {
 type ResetPasswordOutput struct{}
 
 func HandleResetPassword(ctx context.Context, input *ResetPasswordInput) (*ResetPasswordOutput, error) {
-	panic("implement me")
+	user, err := db.Queries.FindUserBySlug(ctx, input.Body.Slug)
+	if err != nil {
+		return nil, huma.Error404NotFound("mismatched code or slug")
+	}
+
+	if err = auth.ReplaceUserPasswordWithTotpValidation(ctx, user.ID, input.Body.Code, input.Body.Password); err != nil {
+		return nil, huma.Error404NotFound("mismatched code or slug")
+	}
+
+	return &ResetPasswordOutput{}, nil
 }
 
 type ConflictSignUpSlug struct {

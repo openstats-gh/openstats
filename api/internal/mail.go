@@ -3,11 +3,11 @@ package internal
 import (
 	"context"
 	"fmt"
+	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
 	"github.com/dresswithpockets/openstats/app/env"
 	"github.com/dresswithpockets/openstats/app/mail"
-	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"github.com/rotisserie/eris"
 	"net/url"
@@ -15,14 +15,8 @@ import (
 	"time"
 )
 
-var ValidateOptions = totp.ValidateOpts{
-	Period:    30 * 60,
-	Digits:    6,
-	Algorithm: otp.AlgorithmSHA512,
-}
-
 func SendEmailConfirmation(ctx context.Context, otpSecret, email string) error {
-	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), ValidateOptions)
+	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), auth.ValidateOptions)
 
 	if totpErr != nil {
 		return totpErr
@@ -65,7 +59,7 @@ const (
 )
 
 func Send2faTotpEmail(ctx context.Context, purpose TotpPurpose, slug, otpSecret, email string) error {
-	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), ValidateOptions)
+	totpCode, totpErr := totp.GenerateCodeCustom(otpSecret, time.Now(), auth.ValidateOptions)
 
 	if totpErr != nil {
 		return totpErr
@@ -112,7 +106,7 @@ func ValidateUserEmail(ctx context.Context, userId int32, email, passcode string
 		return false, eris.Wrap(dbErr, "error getting user hmac secret")
 	}
 
-	validated, validateErr := totp.ValidateCustom(passcode, hmacSecret, time.Now(), ValidateOptions)
+	validated, validateErr := totp.ValidateCustom(passcode, hmacSecret, time.Now(), auth.ValidateOptions)
 	if validateErr != nil {
 		return false, eris.Wrap(validateErr, "error validating OTP")
 	}
