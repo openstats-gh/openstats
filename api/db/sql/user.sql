@@ -97,28 +97,3 @@ select d.slug, d.created_at, dm.created_at as joined_at
 from developer_member dm
      join developer d on dm.developer_id = d.id
 where dm.user_id = $1;
-
--- name: GetUserRecentAchievements :many
-select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description
-from achievement_progress ap
-     join achievement a on ap.achievement_id = a.id
-     join users u on ap.user_id = u.id
-     join game g on a.game_id = g.id
-     join developer d on g.developer_id = d.id
-where u.uuid = @user_uuid
-  and ap.progress >= a.progress_requirement
-order by ap.created_at desc
-limit $1;
-
--- name: GetOtherUserRecentAchievements :many
-select d.slug as developer_slug, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, coalesce(uldn.display_name, u.slug) as user_friendly_name
-from achievement_progress ap
-     join achievement a on ap.achievement_id = a.id
-     join users u on ap.user_id = u.id
-     join game g on a.game_id = g.id
-     join developer d on g.developer_id = d.id
-     left outer join user_latest_display_name uldn on u.id = uldn.user_id
-where u.uuid != @excluded_user_uuid
-  and ap.progress >= a.progress_requirement
-order by ap.created_at desc
-limit $1;
