@@ -16,42 +16,21 @@ on conflict(game_id, slug)
 returning case when achievement.created_at == achievement.updated_at then true else false end as upsert_was_insert;
 
 -- name: GetUsersRarestAchievements :many
-with achievement_rarity as (
-    select a.id,
-           a.slug,
-           a.name,
-           a.description,
-           a.game_id,
-           (count(*)::float / (select count(distinct gs.user_id)
-                               from game_session gs
-                               where gs.game_id = a.game_id)) as completion_percent
-    from achievement_progress ap
-         join achievement a on ap.achievement_id = a.id
-    where ap.progress >= a.progress_requirement
-    group by a.id
-)
-select ap.*, g.uuid game_uuid, ar.slug, ar.name, ar.description, ar.completion_percent::float as rarity
+select ap.*, g.uuid game_uuid, ar.slug, ar.name, ar.description, ar.completion_percent::double precision as rarity
 from achievement_progress ap
-     join achievement_rarity ar on ap.achievement_id = ar.id
-     join users u on ap.user_id = u.id
+     join achievement_rarity ar on ap.achievement_id = ar.id and ap.progress >= ar.progress_requirement
      join game g on ar.game_id = g.id
+     join users u on ap.user_id = u.id
 where u.uuid = @user_uuid and ar.completion_percent <= @max_completion_percent::float
 order by ar.completion_percent
 limit $1;
 
 -- name: GetUsersCompletedGames :many
-with target_user_id as (
-    -- TODO: maybe this can just be a left outer join on in the inner subquery?
-    select u.id from users u where u.uuid = @user_uuid
-)
-select *, (select count() from achievement a1 where a1.game_id = g.id) as achievement_count
-from game g
-where true = all (select (ap.progress >= a.progress_requirement) as completed
-                  from achievement a
-                       left outer join achievement_progress ap
-                           on a.id = ap.achievement_id and
-                              ap.user_id = target_user_id
-                  where a.game_id = g.id)
+select g.uuid as game_uuid, (select count(*) from achievement ga where ga.game_id = gc.game_id) as achievement_count, gc.*
+from game_completion gc
+     join users u on gc.user_id = u.id
+     join game g on gc.game_id = g.id
+where u.uuid = @user_uuid and gc.has_every_achievement
 limit $1;
 
 -- name: GetUserRecentAchievements :many

@@ -166,18 +166,11 @@ func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRece
 }
 
 const getUsersCompletedGames = `-- name: GetUsersCompletedGames :many
-with target_user_id as (
-    -- TODO: maybe this can just be a left outer join on in the inner subquery?
-    select u.id from users u where u.uuid = $2
-)
-select id, created_at, updated_at, developer_id, uuid, slug, (select count() from achievement a1 where a1.game_id = g.id) as achievement_count
-from game g
-where true = all (select (ap.progress >= a.progress_requirement) as completed
-                  from achievement a
-                       left outer join achievement_progress ap
-                           on a.id = ap.achievement_id and
-                              ap.user_id = target_user_id
-                  where a.game_id = g.id)
+select g.uuid as game_uuid, (select count(*) from achievement ga where ga.game_id = gc.game_id) as achievement_count, gc.game_id, gc.user_id, gc.unlock_count, gc.has_every_achievement
+from game_completion gc
+     join users u on gc.user_id = u.id
+     join game g on gc.game_id = g.id
+where u.uuid = $2 and gc.has_every_achievement
 limit $1
 `
 
@@ -187,13 +180,12 @@ type GetUsersCompletedGamesParams struct {
 }
 
 type GetUsersCompletedGamesRow struct {
-	ID               int32
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
-	DeveloperID      int32
-	Uuid             uuid.UUID
-	Slug             string
-	AchievementCount int64
+	GameUuid            uuid.UUID
+	AchievementCount    int64
+	GameID              int32
+	UserID              int32
+	UnlockCount         int64
+	HasEveryAchievement bool
 }
 
 func (q *Queries) GetUsersCompletedGames(ctx context.Context, arg GetUsersCompletedGamesParams) ([]GetUsersCompletedGamesRow, error) {
@@ -206,13 +198,12 @@ func (q *Queries) GetUsersCompletedGames(ctx context.Context, arg GetUsersComple
 	for rows.Next() {
 		var i GetUsersCompletedGamesRow
 		if err := rows.Scan(
-			&i.ID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-			&i.DeveloperID,
-			&i.Uuid,
-			&i.Slug,
+			&i.GameUuid,
 			&i.AchievementCount,
+			&i.GameID,
+			&i.UserID,
+			&i.UnlockCount,
+			&i.HasEveryAchievement,
 		); err != nil {
 			return nil, err
 		}
@@ -225,25 +216,11 @@ func (q *Queries) GetUsersCompletedGames(ctx context.Context, arg GetUsersComple
 }
 
 const getUsersRarestAchievements = `-- name: GetUsersRarestAchievements :many
-with achievement_rarity as (
-    select a.id,
-           a.slug,
-           a.name,
-           a.description,
-           a.game_id,
-           (count(*)::float / (select count(distinct gs.user_id)
-                               from game_session gs
-                               where gs.game_id = a.game_id)) as completion_percent
-    from achievement_progress ap
-         join achievement a on ap.achievement_id = a.id
-    where ap.progress >= a.progress_requirement
-    group by a.id
-)
-select ap.created_at, ap.updated_at, ap.user_id, ap.achievement_id, ap.progress, g.uuid game_uuid, ar.slug, ar.name, ar.description, ar.completion_percent::float as rarity
+select ap.created_at, ap.updated_at, ap.user_id, ap.achievement_id, ap.progress, g.uuid game_uuid, ar.slug, ar.name, ar.description, ar.completion_percent::double precision as rarity
 from achievement_progress ap
-     join achievement_rarity ar on ap.achievement_id = ar.id
-     join users u on ap.user_id = u.id
+     join achievement_rarity ar on ap.achievement_id = ar.id and ap.progress >= ar.progress_requirement
      join game g on ar.game_id = g.id
+     join users u on ap.user_id = u.id
 where u.uuid = $2 and ar.completion_percent <= $3::float
 order by ar.completion_percent
 limit $1

@@ -38,6 +38,19 @@ type AchievementProgress struct {
 	Progress      int32
 }
 
+type AchievementRarity struct {
+	ID                  int32
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
+	GameID              int32
+	Slug                string
+	Name                string
+	Description         string
+	ProgressRequirement int32
+	CompletionCount     float64
+	CompletionPercent   float64
+}
+
 type DeletedRecord struct {
 	ID          uuid.UUID
 	DeletedAt   time.Time
@@ -98,6 +111,13 @@ type GameAvatar struct {
 	Uuid      uuid.UUID
 	Blurhash  string
 	GameID    int32
+}
+
+type GameCompletion struct {
+	GameID              int32
+	UserID              int32
+	UnlockCount         int64
+	HasEveryAchievement bool
 }
 
 type GameSession struct {

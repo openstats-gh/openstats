@@ -147,7 +147,7 @@ func GetUserProfile(ctx context.Context, userUuid uuid.UUID) (UserProfile, error
 	for idx, game := range completedGames {
 		completed[idx] = ProfileCompletedGame{
 			Game: ProfileGame{
-				RID:       rid.From(GameRidPrefix, game.Uuid),
+				RID:       rid.From(GameRidPrefix, game.GameUuid),
 				Name:      "", // TODO: game display names
 				AvatarUrl: "", // TODO: game display avatars
 			},
