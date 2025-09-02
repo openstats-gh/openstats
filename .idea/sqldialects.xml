@@ -5,6 +5,9 @@
     <file url="file://$PROJECT_DIR$/api/db/migrations/20250715214445_initial-schema.up.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/api/db/migrations/20250819054120_email-verification.down.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/api/db/migrations/20250819054120_email-verification.up.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/api/db/migrations/20250829022929_achievement-enhancement.down.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/api/db/migrations/20250829022929_achievement-enhancement.up.sql" dialect="PostgreSQL" />
+    <file url="file://$PROJECT_DIR$/api/db/sql/achievement.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/api/db/sql/avatars.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/api/db/sql/game.sql" dialect="PostgreSQL" />
     <file url="file://$PROJECT_DIR$/api/db/sql/game_session.sql" dialect="PostgreSQL" />

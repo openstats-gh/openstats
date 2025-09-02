@@ -150,3 +150,23 @@ func (q *Queries) GetGameAchievements(ctx context.Context, gameID int32) ([]Achi
 	}
 	return items, nil
 }
+
+const getGameProfile = `-- name: GetGameProfile :one
+select g.slug,
+       d.slug as developer_slug
+from game g
+     join developer d on g.developer_id = d.id
+where g.uuid = $1
+`
+
+type GetGameProfileRow struct {
+	Slug          string
+	DeveloperSlug string
+}
+
+func (q *Queries) GetGameProfile(ctx context.Context, gameUuid uuid.UUID) (GetGameProfileRow, error) {
+	row := q.db.QueryRow(ctx, getGameProfile, gameUuid)
+	var i GetGameProfileRow
+	err := row.Scan(&i.Slug, &i.DeveloperSlug)
+	return i, err
+}

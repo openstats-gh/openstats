@@ -250,9 +250,20 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "get-user-profile",
 		Summary:     "Get a user's profile",
 		Description: "Get a user's displayable profile",
-
-		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetUserProfile)
+
+	gameApi := huma.NewGroup(internalApi, "/games/v1")
+	gameApi.UseSimpleModifier(func(op *huma.Operation) {
+		op.Tags = append(op.Tags, "Internal/Games")
+	})
+
+	huma.Register(gameApi, huma.Operation{
+		Method:      http.MethodGet,
+		Path:        "/{game}/profile",
+		OperationID: "get-game-profile",
+		Summary:     "Get a game's profile",
+		Description: "Get a game's displayable profile",
+	}, HandleGetGameProfile)
 }
 
 type SendEmailConfInput struct {
@@ -766,7 +777,7 @@ func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchU
 }
 
 type GetUserProfileRequest struct {
-	UserRID rid.RID `query:"userRid" required:"true"`
+	UserRID rid.RID `path:"user" required:"true"`
 }
 
 type GetUserProfileResponse struct {
@@ -785,4 +796,26 @@ func HandleGetUserProfile(ctx context.Context, input *GetUserProfileRequest) (*G
 	}
 
 	return &GetUserProfileResponse{Body: profile}, nil
+}
+
+type GetGameProfileInput struct {
+	GameRID rid.RID `query:"game" required:"true"`
+}
+
+type GetGameProfileOutput struct {
+	Body GameProfile
+}
+
+func HandleGetGameProfile(ctx context.Context, input *GetGameProfileInput) (*GetGameProfileOutput, error) {
+	// TODO: huma validator for rid prefix...
+	if input.GameRID.Prefix != GameRidPrefix {
+		return nil, huma.Error400BadRequest("invalid user id")
+	}
+
+	gameProfile, err := GetGameProfile(ctx, input.GameRID.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &GetGameProfileOutput{Body: *gameProfile}, nil
 }

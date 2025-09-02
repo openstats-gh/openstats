@@ -7,6 +7,7 @@ package query
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -39,6 +40,386 @@ func (q *Queries) FindAchievementBySlug(ctx context.Context, arg FindAchievement
 		&i.ProgressRequirement,
 	)
 	return i, err
+}
+
+const getGameAchievementsWithRarity = `-- name: GetGameAchievementsWithRarity :many
+select
+    ar.slug,
+    ar.name,
+    ar.description,
+    ar.completion_percent::double precision as rarity
+from achievement_rarity ar
+     join game g on ar.game_id = g.id
+where g.uuid = $1
+order by ar.completion_percent desc
+`
+
+type GetGameAchievementsWithRarityRow struct {
+	Slug        string
+	Name        string
+	Description string
+	Rarity      float64
+}
+
+func (q *Queries) GetGameAchievementsWithRarity(ctx context.Context, gameUuid uuid.UUID) ([]GetGameAchievementsWithRarityRow, error) {
+	rows, err := q.db.Query(ctx, getGameAchievementsWithRarity, gameUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetGameAchievementsWithRarityRow
+	for rows.Next() {
+		var i GetGameAchievementsWithRarityRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+			&i.Rarity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements :many
+select d.slug as developer_slug, g.uuid as game_uuid, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, coalesce(uldn.display_name, u.slug) as user_friendly_name
+from achievement_progress ap
+     join achievement a on ap.achievement_id = a.id
+     join users u on ap.user_id = u.id
+     join game g on a.game_id = g.id
+     join developer d on g.developer_id = d.id
+     left outer join user_latest_display_name uldn on u.id = uldn.user_id
+where u.uuid != $2
+  and ap.progress >= a.progress_requirement
+order by ap.created_at desc
+limit $1
+`
+
+type GetOtherUserRecentAchievementsParams struct {
+	Limit            int32
+	ExcludedUserUuid uuid.UUID
+}
+
+type GetOtherUserRecentAchievementsRow struct {
+	DeveloperSlug    string
+	GameUuid         uuid.UUID
+	GameSlug         string
+	GameName         string
+	Slug             string
+	Name             string
+	Description      string
+	UserUuid         uuid.UUID
+	UserFriendlyName string
+}
+
+func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOtherUserRecentAchievementsParams) ([]GetOtherUserRecentAchievementsRow, error) {
+	rows, err := q.db.Query(ctx, getOtherUserRecentAchievements, arg.Limit, arg.ExcludedUserUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetOtherUserRecentAchievementsRow
+	for rows.Next() {
+		var i GetOtherUserRecentAchievementsRow
+		if err := rows.Scan(
+			&i.DeveloperSlug,
+			&i.GameUuid,
+			&i.GameSlug,
+			&i.GameName,
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+			&i.UserUuid,
+			&i.UserFriendlyName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRecentGameAchievements = `-- name: GetRecentGameAchievements :many
+select ar.slug,
+       ar.name,
+       ar.description,
+       ar.completion_percent::double precision as rarity,
+       u.uuid as user_uuid,
+       u.slug as user_slug
+from achievement_progress ap
+     join achievement_rarity ar on ap.achievement_id = ar.id
+     join game g on ar.game_id = g.id
+     join users u on ap.user_id = u.id
+where g.uuid = $2 and ap.progress >= ar.progress_requirement
+order by ap.created_at desc
+limit $1
+`
+
+type GetRecentGameAchievementsParams struct {
+	Limit    int32
+	GameUuid uuid.UUID
+}
+
+type GetRecentGameAchievementsRow struct {
+	Slug        string
+	Name        string
+	Description string
+	Rarity      float64
+	UserUuid    uuid.UUID
+	UserSlug    string
+}
+
+func (q *Queries) GetRecentGameAchievements(ctx context.Context, arg GetRecentGameAchievementsParams) ([]GetRecentGameAchievementsRow, error) {
+	rows, err := q.db.Query(ctx, getRecentGameAchievements, arg.Limit, arg.GameUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentGameAchievementsRow
+	for rows.Next() {
+		var i GetRecentGameAchievementsRow
+		if err := rows.Scan(
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+			&i.Rarity,
+			&i.UserUuid,
+			&i.UserSlug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getRecentGameCompletions = `-- name: GetRecentGameCompletions :many
+select gc.unlocked_at,
+       u.uuid as user_uuid,
+       u.slug as user_slug
+from game_completion gc
+     join game g on gc.game_id = g.id
+     join users u on gc.user_id = u.id
+where g.uuid = $2 and gc.has_every_achievement
+order by gc.unlocked_at desc
+limit $1
+`
+
+type GetRecentGameCompletionsParams struct {
+	Limit    int32
+	GameUuid uuid.UUID
+}
+
+type GetRecentGameCompletionsRow struct {
+	UnlockedAt time.Time
+	UserUuid   uuid.UUID
+	UserSlug   string
+}
+
+func (q *Queries) GetRecentGameCompletions(ctx context.Context, arg GetRecentGameCompletionsParams) ([]GetRecentGameCompletionsRow, error) {
+	rows, err := q.db.Query(ctx, getRecentGameCompletions, arg.Limit, arg.GameUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetRecentGameCompletionsRow
+	for rows.Next() {
+		var i GetRecentGameCompletionsRow
+		if err := rows.Scan(&i.UnlockedAt, &i.UserUuid, &i.UserSlug); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserRecentAchievements = `-- name: GetUserRecentAchievements :many
+select d.slug as developer_slug,
+       g.uuid as game_uuid,
+       g.slug as game_slug,
+       '' as game_name,
+       a.slug as slug,
+       a.name as name,
+       a.description as description
+from achievement_progress ap
+     join achievement a on ap.achievement_id = a.id
+     join users u on ap.user_id = u.id
+     join game g on a.game_id = g.id
+     join developer d on g.developer_id = d.id
+where u.uuid = $2
+  and ap.progress >= a.progress_requirement
+order by ap.created_at desc
+limit $1
+`
+
+type GetUserRecentAchievementsParams struct {
+	Limit    int32
+	UserUuid uuid.UUID
+}
+
+type GetUserRecentAchievementsRow struct {
+	DeveloperSlug string
+	GameUuid      uuid.UUID
+	GameSlug      string
+	GameName      string
+	Slug          string
+	Name          string
+	Description   string
+}
+
+func (q *Queries) GetUserRecentAchievements(ctx context.Context, arg GetUserRecentAchievementsParams) ([]GetUserRecentAchievementsRow, error) {
+	rows, err := q.db.Query(ctx, getUserRecentAchievements, arg.Limit, arg.UserUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUserRecentAchievementsRow
+	for rows.Next() {
+		var i GetUserRecentAchievementsRow
+		if err := rows.Scan(
+			&i.DeveloperSlug,
+			&i.GameUuid,
+			&i.GameSlug,
+			&i.GameName,
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsersCompletedGames = `-- name: GetUsersCompletedGames :many
+select g.uuid as game_uuid, (select count(*) from achievement ga where ga.game_id = gc.game_id) as achievement_count, gc.game_id, gc.user_id, gc.unlocked_at, gc.unlock_count, gc.has_every_achievement
+from game_completion gc
+     join users u on gc.user_id = u.id
+     join game g on gc.game_id = g.id
+where u.uuid = $2 and gc.has_every_achievement
+limit $1
+`
+
+type GetUsersCompletedGamesParams struct {
+	Limit    int32
+	UserUuid uuid.UUID
+}
+
+type GetUsersCompletedGamesRow struct {
+	GameUuid            uuid.UUID
+	AchievementCount    int64
+	GameID              int32
+	UserID              int32
+	UnlockedAt          time.Time
+	UnlockCount         int64
+	HasEveryAchievement bool
+}
+
+func (q *Queries) GetUsersCompletedGames(ctx context.Context, arg GetUsersCompletedGamesParams) ([]GetUsersCompletedGamesRow, error) {
+	rows, err := q.db.Query(ctx, getUsersCompletedGames, arg.Limit, arg.UserUuid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsersCompletedGamesRow
+	for rows.Next() {
+		var i GetUsersCompletedGamesRow
+		if err := rows.Scan(
+			&i.GameUuid,
+			&i.AchievementCount,
+			&i.GameID,
+			&i.UserID,
+			&i.UnlockedAt,
+			&i.UnlockCount,
+			&i.HasEveryAchievement,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUsersRarestAchievements = `-- name: GetUsersRarestAchievements :many
+select ap.created_at, ap.updated_at, ap.user_id, ap.achievement_id, ap.progress, g.uuid game_uuid, ar.slug, ar.name, ar.description, ar.completion_percent::double precision as rarity
+from achievement_progress ap
+     join achievement_rarity ar on ap.achievement_id = ar.id and ap.progress >= ar.progress_requirement
+     join game g on ar.game_id = g.id
+     join users u on ap.user_id = u.id
+where u.uuid = $2 and ar.completion_percent <= $3::float
+order by ar.completion_percent
+limit $1
+`
+
+type GetUsersRarestAchievementsParams struct {
+	Limit                int32
+	UserUuid             uuid.UUID
+	MaxCompletionPercent float64
+}
+
+type GetUsersRarestAchievementsRow struct {
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+	UserID        int32
+	AchievementID int32
+	Progress      int32
+	GameUuid      uuid.UUID
+	Slug          string
+	Name          string
+	Description   string
+	Rarity        float64
+}
+
+func (q *Queries) GetUsersRarestAchievements(ctx context.Context, arg GetUsersRarestAchievementsParams) ([]GetUsersRarestAchievementsRow, error) {
+	rows, err := q.db.Query(ctx, getUsersRarestAchievements, arg.Limit, arg.UserUuid, arg.MaxCompletionPercent)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetUsersRarestAchievementsRow
+	for rows.Next() {
+		var i GetUsersRarestAchievementsRow
+		if err := rows.Scan(
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.UserID,
+			&i.AchievementID,
+			&i.Progress,
+			&i.GameUuid,
+			&i.Slug,
+			&i.Name,
+			&i.Description,
+			&i.Rarity,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const upsertAchievement = `-- name: UpsertAchievement :one

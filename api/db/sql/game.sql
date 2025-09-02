@@ -17,3 +17,10 @@ where game.slug = @game_slug and developer.slug = @dev_slug;
 
 -- name: GetGameAchievements :many
 select * from achievement where game_id = $1;
+
+-- name: GetGameProfile :one
+select g.slug,
+       d.slug as developer_slug
+from game g
+     join developer d on g.developer_id = d.id
+where g.uuid = @game_uuid;
