@@ -116,6 +116,7 @@ type GameAvatar struct {
 type GameCompletion struct {
 	GameID              int32
 	UserID              int32
+	UnlockedAt          time.Time
 	UnlockCount         int64
 	HasEveryAchievement bool
 }

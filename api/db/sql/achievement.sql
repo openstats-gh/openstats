@@ -63,3 +63,40 @@ where u.uuid != @excluded_user_uuid
   and ap.progress >= a.progress_requirement
 order by ap.created_at desc
 limit $1;
+
+-- name: GetGameAchievementsWithRarity :many
+select
+    ar.slug,
+    ar.name,
+    ar.description,
+    ar.completion_percent::double precision as rarity
+from achievement_rarity ar
+     join game g on ar.game_id = g.id
+where g.uuid = @game_uuid
+order by ar.completion_percent desc;
+
+-- name: GetRecentGameAchievements :many
+select ar.slug,
+       ar.name,
+       ar.description,
+       ar.completion_percent::double precision as rarity,
+       u.uuid as user_uuid,
+       u.slug as user_slug
+from achievement_progress ap
+     join achievement_rarity ar on ap.achievement_id = ar.id
+     join game g on ar.game_id = g.id
+     join users u on ap.user_id = u.id
+where g.uuid = @game_uuid and ap.progress >= ar.progress_requirement
+order by ap.created_at desc
+limit $1;
+
+-- name: GetRecentGameCompletions :many
+select gc.unlocked_at,
+       u.uuid as user_uuid,
+       u.slug as user_slug
+from game_completion gc
+     join game g on gc.game_id = g.id
+     join users u on gc.user_id = u.id
+where g.uuid = @game_uuid and gc.has_every_achievement
+order by gc.unlocked_at desc
+limit $1;
