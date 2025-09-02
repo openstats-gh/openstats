@@ -250,8 +250,6 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "get-user-profile",
 		Summary:     "Get a user's profile",
 		Description: "Get a user's displayable profile",
-
-		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetUserProfile)
 }
 
