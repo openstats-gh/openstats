@@ -32,25 +32,30 @@ Soon...
 
 ## Development
 
+Openstats consists of a Go API in `api/`, and a TypeScript Svelte Website in `web/`.
+
 ### Setup
 
-1. Install [docker](https://docs.docker.com/engine/install/) & https://docs.docker.com/compose/install/
-2. Install go 1.24
-3. Install node.js 24 & npm 11
-4. Install `migrate`
+1. `git clone https://github.com/openstats-gh/openstats`
+2. Install [docker](https://docs.docker.com/engine/install/) & https://docs.docker.com/compose/install/
+3. Install go 1.25
+4. Install node.js 24 & npm 11
+5. Install `migrate`
     ```shell
     go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
     ```
-5. Install web dependencies
+6. Install web dependencies
     ```shell
     cd web
     npm i
     ```
-6. Create `api/.env.local` and `web/.env.local`
+7. Create `api/.env.local` and `web/.env.local`
    - See `api/.env.local.example` and `web/.env.local.example` for instructions
-   
+    
 > [!NOTE]
-> If you see something like `command not found` when trying to use `migrate`, chances are the gopath `go/bin` directory isn't on your `PATH`! This is usually located in your home directory e.g. `C:/Users/YourUserName/go/bin` or `/home/username/go/bin`. See `go help install` for more information.
+> If you see something like `command not found` when trying to use `migrate`, chances are the gopath `go/bin` directory
+> isn't on your `PATH`! This is usually located in your home directory e.g. `C:/Users/YourUserName/go/bin` or 
+> `/home/username/go/bin`. See `go help install` for more information.
 
 Further reading:
 
@@ -212,3 +217,4 @@ import (
 // ...
     var user query.User, err error = Queries.FindUser(c.Context(), userId)
 ```
+
