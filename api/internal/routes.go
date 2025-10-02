@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"image/png"
 	"net/http"
@@ -42,7 +43,7 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "send-slug-reminder",
 		Summary:     "Send slug reminder",
 		Description: "Send an email to the email provided containing a list of all users associated with the email",
-		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusBadRequest},
 		Tags:        []string{"Internal"},
 
 		Middlewares: disallowUserSessionMiddlewares,
@@ -54,7 +55,7 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "send-password-reset",
 		Summary:     "Send password reset",
 		Description: "Send a 2FA TOTP code to the email associated with the slug, to use with /reset-password",
-		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusBadRequest},
 		Tags:        []string{"Internal"},
 
 		Middlewares: disallowUserSessionMiddlewares,
@@ -66,7 +67,7 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "reset-password",
 		Summary:     "Reset password",
 		Description: "Given a 2FA TOTP code, changes the user's password and signs them into their account",
-		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusBadRequest},
 		Tags:        []string{"Internal"},
 
 		Middlewares: disallowUserSessionMiddlewares,
@@ -81,12 +82,9 @@ func RegisterRoutes(api huma.API) {
 		Method:      http.MethodPost,
 		Path:        "/sign-up",
 		OperationID: "sign-up",
-		Errors: []int{
-			http.StatusUnauthorized,
-			http.StatusConflict,
-		},
 		Summary:     "Sign up",
 		Description: "Create a new user and sign into a new session as the new user",
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict},
 
 		Middlewares: disallowUserSessionMiddlewares,
 	}, HandlePostSignUp)
@@ -97,7 +95,7 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "sign-in",
 		Summary:     "Sign in",
 		Description: "Sign into a new session as an existing user",
-		Errors:      []int{http.StatusUnauthorized},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized},
 
 		Middlewares: disallowUserSessionMiddlewares,
 	}, HandlePostSignIn)
@@ -108,6 +106,7 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "sign-out",
 		Summary:     "Sign out",
 		Description: "Sign out of the current session, and invalidate the session token",
+		Errors:      []int{http.StatusUnauthorized},
 
 		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
@@ -121,6 +120,7 @@ func RegisterRoutes(api huma.API) {
 		Description: "Get details about the current authenticated session and the associated user",
 		Errors:      []int{http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetSession)
 
@@ -130,8 +130,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "add-email",
 		Summary:     "Add an email",
 		Description: "Sends a confirmation to the email; once confirmed by /confirm-email, the email will be associated with the current session's user",
-		Errors:      []int{http.StatusUnauthorized, http.StatusConflict},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusConflict},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleAddEmail)
 
@@ -141,8 +142,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "confirm-email",
 		Summary:     "Confirm an email",
 		Description: "Validates an email confirmation TOTP; if successful, the email will be marked as verified",
-		Errors:      []int{http.StatusUnauthorized},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleConfirmEmail)
 
@@ -152,8 +154,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "remove-email",
 		Summary:     "Remove an email",
 		Description: "Un-associated the current user's email",
-		Errors:      []int{http.StatusUnauthorized, http.StatusNotFound},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized, http.StatusNotFound},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleRemoveEmail)
 
@@ -163,8 +166,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "replace-password",
 		Summary:     "Change user's password",
 		Description: "Changes the current session user's password",
-		Errors:      []int{http.StatusUnauthorized},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleChangePassword)
 
@@ -174,7 +178,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "get-session-profile",
 		Summary:     "Get user's profile",
 		Description: "Get profile of current authenticated user",
+		Errors:      []int{http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetSessionProfile)
 
@@ -184,7 +190,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "update-session-profile",
 		Summary:     "Update user's profile",
 		Description: "Update profile of current authenticated user",
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSessionProfile)
 
@@ -193,8 +201,10 @@ func RegisterRoutes(api huma.API) {
 		Path:        "/profile/avatar",
 		OperationID: "update-session-avatar",
 		Summary:     "Update user's avatar",
-		Description: "Update avatar of current authenticated user",
+		Description: "Update avatar of current authenticated user. The avatar must be padded-base64-encoded PNG data. The image can be at most 1 MB, with a size between 64x64 and 512x512 pixels.",
+		Errors:      []int{http.StatusUnauthorized, http.StatusBadRequest},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSessionAvatar)
 
@@ -204,7 +214,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "get-game-tokens",
 		Summary:     "Get user's tokens",
 		Description: "Get all of the current user's tokens",
+		Errors:      []int{http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleGetSessionGameTokens)
 
@@ -214,8 +226,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "create-game-token",
 		Summary:     "Create a new token",
 		Description: "Create a new token for the current user",
-		Errors:      []int{http.StatusBadRequest},
+		Errors:      []int{http.StatusBadRequest, http.StatusUnauthorized},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandlePostSessionGameToken)
 
@@ -227,6 +240,7 @@ func RegisterRoutes(api huma.API) {
 		Description: "Invalidate one of the current user's tokens",
 		Errors:      []int{http.StatusBadRequest},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleDeleteSessionGameToken)
 
@@ -240,7 +254,9 @@ func RegisterRoutes(api huma.API) {
 		OperationID: "search-users",
 		Summary:     "Search users",
 		Description: "Search all users by various criteria",
+		Errors:      []int{http.StatusBadRequest},
 
+		Security:    sessionCookieSecurityMap,
 		Middlewares: requireUserSessionMiddlewares,
 	}, HandleSearchUsers)
 
@@ -392,7 +408,7 @@ func HandleChangePassword(ctx context.Context, input *ChangePasswordInput) (outp
 
 type InternalUser struct {
 	RID         rid.RID       `json:"rid" readOnly:"true"`
-	CreatedAt   time.Time     `json:"createdAt" readOnly:"true"`
+	CreatedAt   time.Time     `json:"createdAt,omitempty" readOnly:"true"`
 	Slug        *string       `json:"slug,omitempty"`
 	DisplayName *string       `json:"displayName,omitempty"`
 	BioText     *string       `json:"bioText,omitempty"`
@@ -421,8 +437,7 @@ func (i *ProfileUnlockedAchievements) MapFromRow(row query.GetUserRecentAchievem
 
 type ProfileOtherUserUnlockedAchievements struct {
 	ProfileUnlockedAchievements
-	UserRID          rid.RID
-	UserFriendlyName string `json:"userFriendlyName" doc:"The best available name that can be displayed on screen for a human reader. Will be the user's display name if they have one, otherwise it will be their slug."`
+	User InternalUser `json:"user" readOnly:"true"`
 }
 
 func (i *ProfileOtherUserUnlockedAchievements) MapFromRow(row query.GetOtherUserRecentAchievementsRow) {
@@ -435,11 +450,14 @@ func (i *ProfileOtherUserUnlockedAchievements) MapFromRow(row query.GetOtherUser
 			Name:          row.Name,
 			Description:   row.Description,
 		},
-		UserRID: rid.RID{
-			Prefix: auth.UserRidPrefix,
-			ID:     row.UserUuid,
+		User: InternalUser{
+			RID:         rid.From(auth.UserRidPrefix, row.UserUuid),
+			CreatedAt:   time.Time{},
+			Slug:        &row.UserSlug,
+			DisplayName: row.UserDisplayName,
+			BioText:     nil,
+			Avatar:      nil,
 		},
-		UserFriendlyName: row.UserFriendlyName,
 	}
 }
 
@@ -494,7 +512,7 @@ func HandlePostSessionProfile(ctx context.Context, input *PostSessionRequest) (*
 }
 
 type PostAvatarInput struct {
-	Body []byte
+	Body string `contentType:"image/png" maxLength:"1431655768" minLength:"20" doc:"the base64 contents of a PNG image to upload as Avatar" example:"iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAaklEQVR4nO3QMQEAMAwEIYb4t9wKuUcChyfsxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3AfiJAIAhq0fNAAAAABJRU5ErkJggg=="`
 }
 
 type PostAvatarOutput struct {
@@ -507,9 +525,19 @@ func HandlePostSessionAvatar(ctx context.Context, input *PostAvatarInput) (*Post
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
-	decodedPng, pngErr := png.Decode(bytes.NewBuffer(input.Body))
+	imageData, baseErr := base64.StdEncoding.DecodeString(input.Body)
+	if baseErr != nil {
+		return nil, huma.Error400BadRequest("invalid base64 data", baseErr)
+	}
+
+	decodedPng, pngErr := png.Decode(bytes.NewBuffer(imageData))
 	if pngErr != nil {
-		return nil, pngErr
+		return nil, huma.Error400BadRequest("invalid png data", pngErr)
+	}
+
+	pngBounds := decodedPng.Bounds()
+	if pngBounds.Dx() < 64 || pngBounds.Dy() < 64 || pngBounds.Dx() > 512 || pngBounds.Dy() > 512 {
+		return nil, huma.Error400BadRequest("avatar must be at least 64x64, and at most 512x512")
 	}
 
 	blur, blurErr := blurhash.Encode(4, 4, decodedPng)
@@ -527,7 +555,7 @@ func HandlePostSessionAvatar(ctx context.Context, input *PostAvatarInput) (*Post
 			return err
 		}
 
-		return media.WriteAvatar(input.Body, "users", newAvatar.Uuid)
+		return media.WriteAvatar(imageData, "users", newAvatar.Uuid)
 	})
 
 	if transactErr != nil {

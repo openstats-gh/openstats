@@ -4,6 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"log"
+	"time"
+
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
 	"github.com/dresswithpockets/openstats/app/db/query"
@@ -12,7 +15,6 @@ import (
 	"github.com/dresswithpockets/openstats/app/users"
 	"github.com/google/uuid"
 	"github.com/rotisserie/eris"
-	"log"
 )
 
 type ProfileAchievement struct {
@@ -51,8 +53,7 @@ type ProfileCompletedGame struct {
 
 type ProfileOtherUserUnlockedAchievement struct {
 	ProfileUnlockedAchievement
-	UserRID          rid.RID
-	UserFriendlyName string `json:"userFriendlyName" doc:"The best available name that can be displayed on screen for a human reader. Will be the user's display name if they have one, otherwise it will be their slug."`
+	User InternalUser `json:"user" readOnly:"true"`
 }
 
 type UserProfile struct {
@@ -168,8 +169,14 @@ func GetUserProfile(ctx context.Context, userUuid uuid.UUID) (UserProfile, error
 				Name:        achievement.Name,
 				Description: achievement.Description,
 			},
-			UserRID:          rid.From(auth.UserRidPrefix, achievement.UserUuid),
-			UserFriendlyName: achievement.UserFriendlyName,
+			User: InternalUser{
+				RID:         rid.From(auth.UserRidPrefix, achievement.UserUuid),
+				CreatedAt:   time.Time{},
+				Slug:        &achievement.UserSlug,
+				DisplayName: achievement.UserDisplayName,
+				BioText:     nil,
+				Avatar:      nil,
+			},
 		}
 	}
 

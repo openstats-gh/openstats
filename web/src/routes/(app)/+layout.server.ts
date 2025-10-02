@@ -1,21 +1,16 @@
 import type { LayoutServerLoad } from './$types';
-import { api } from '$lib/api';
+import {Client} from "$lib/internalApi";
 
-export const load: LayoutServerLoad = async ({ fetch }) => {
-    const session = await api.with(fetch).getCurrentSession()
+export const load: LayoutServerLoad = async({ fetch }) => {
+    const { data, error } = await Client.GET("/internal/session/", {
+        fetch: fetch
+    })
 
-    if (session === null) {
-        return {
-            hasSession: false,
-            session: {
-                slug: "",
-                displayName: "",
-            },
-        }
+    if (error && error.status !== 401) {
+        console.error("Error getting session", error)
     }
 
     return {
-        hasSession: true,
-        session: session,
+        session: data
     }
 }

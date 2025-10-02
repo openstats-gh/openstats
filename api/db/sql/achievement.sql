@@ -52,7 +52,7 @@ order by ap.created_at desc
 limit $1;
 
 -- name: GetOtherUserRecentAchievements :many
-select d.slug as developer_slug, g.uuid as game_uuid, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, coalesce(uldn.display_name, u.slug) as user_friendly_name
+select d.slug as developer_slug, g.uuid as game_uuid, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, u.slug as user_slug, uldn.display_name as user_display_name
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
      join users u on ap.user_id = u.id
