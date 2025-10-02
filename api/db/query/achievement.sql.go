@@ -87,7 +87,7 @@ func (q *Queries) GetGameAchievementsWithRarity(ctx context.Context, gameUuid uu
 }
 
 const getOtherUserRecentAchievements = `-- name: GetOtherUserRecentAchievements :many
-select d.slug as developer_slug, g.uuid as game_uuid, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, coalesce(uldn.display_name, u.slug) as user_friendly_name
+select d.slug as developer_slug, g.uuid as game_uuid, g.slug as game_slug, '' as game_name, a.slug as slug, a.name as name, a.description as description, u.uuid as user_uuid, u.slug as user_slug, uldn.display_name as user_display_name
 from achievement_progress ap
      join achievement a on ap.achievement_id = a.id
      join users u on ap.user_id = u.id
@@ -106,15 +106,16 @@ type GetOtherUserRecentAchievementsParams struct {
 }
 
 type GetOtherUserRecentAchievementsRow struct {
-	DeveloperSlug    string
-	GameUuid         uuid.UUID
-	GameSlug         string
-	GameName         string
-	Slug             string
-	Name             string
-	Description      string
-	UserUuid         uuid.UUID
-	UserFriendlyName string
+	DeveloperSlug   string
+	GameUuid        uuid.UUID
+	GameSlug        string
+	GameName        string
+	Slug            string
+	Name            string
+	Description     string
+	UserUuid        uuid.UUID
+	UserSlug        string
+	UserDisplayName *string
 }
 
 func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOtherUserRecentAchievementsParams) ([]GetOtherUserRecentAchievementsRow, error) {
@@ -135,7 +136,8 @@ func (q *Queries) GetOtherUserRecentAchievements(ctx context.Context, arg GetOth
 			&i.Name,
 			&i.Description,
 			&i.UserUuid,
-			&i.UserFriendlyName,
+			&i.UserSlug,
+			&i.UserDisplayName,
 		); err != nil {
 			return nil, err
 		}
