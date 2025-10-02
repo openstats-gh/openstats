@@ -512,7 +512,7 @@ func HandlePostSessionProfile(ctx context.Context, input *PostSessionRequest) (*
 }
 
 type PostAvatarInput struct {
-	Body []byte
+	Body string `contentType:"image/png" maxLength:"1431655768" minLength:"20" doc:"the base64 contents of a PNG image to upload as Avatar" example:"iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAaklEQVR4nO3QMQEAMAwEIYb4t9wKuUcChyfsxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3ALELUDcAsQtQNwCxC1A3AfiJAIAhq0fNAAAAABJRU5ErkJggg=="`
 }
 
 type PostAvatarOutput struct {
@@ -525,9 +525,19 @@ func HandlePostSessionAvatar(ctx context.Context, input *PostAvatarInput) (*Post
 		return nil, huma.Error401Unauthorized("no session")
 	}
 
-	decodedPng, pngErr := png.Decode(bytes.NewBuffer(input.Body))
+	imageData, baseErr := base64.StdEncoding.DecodeString(input.Body)
+	if baseErr != nil {
+		return nil, huma.Error400BadRequest("invalid base64 data", baseErr)
+	}
+
+	decodedPng, pngErr := png.Decode(bytes.NewBuffer(imageData))
 	if pngErr != nil {
-		return nil, pngErr
+		return nil, huma.Error400BadRequest("invalid png data", pngErr)
+	}
+
+	pngBounds := decodedPng.Bounds()
+	if pngBounds.Dx() < 64 || pngBounds.Dy() < 64 || pngBounds.Dx() > 512 || pngBounds.Dy() > 512 {
+		return nil, huma.Error400BadRequest("avatar must be at least 64x64, and at most 512x512")
 	}
 
 	blur, blurErr := blurhash.Encode(4, 4, decodedPng)
@@ -545,7 +555,7 @@ func HandlePostSessionAvatar(ctx context.Context, input *PostAvatarInput) (*Post
 			return err
 		}
 
-		return media.WriteAvatar(input.Body, "users", newAvatar.Uuid)
+		return media.WriteAvatar(imageData, "users", newAvatar.Uuid)
 	})
 
 	if transactErr != nil {
