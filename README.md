@@ -41,9 +41,9 @@ Openstats consists of a Go API in `api/`, and a TypeScript Svelte Website in `we
 3. Install go 1.25
 4. Install node.js 24 & npm 11
 5. Install `migrate`
-    ```shell
-    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
-    ```
+   ```shell
+   go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
+   ```
 6. Install web dependencies
    ```shell
    cd web
