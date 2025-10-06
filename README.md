@@ -93,7 +93,7 @@ Expects the postgres database to be alive. See above.
 In `api` as current working directory.
 
 ```shell
-go run
+go run .
 ```
 
 I recommend using an IDE with Go debugging integration such as VS Code or Jetbrains Goland, and setting up
@@ -217,4 +217,3 @@ import (
 // ...
     var user query.User, err error = Queries.FindUser(c.Context(), userId)
 ```
-
