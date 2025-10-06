@@ -1,6 +1,6 @@
 # openstats
 
-Stats & achievement tracking website for games. Follow other players & compare your stats. Showcase your achievement 
+Stats & achievement tracking website for games. Follow other players & compare your stats. Showcase your achievement
 progress, games you've 100%'d, your rarest achievements, and more!
 
 ## Who is this for?
@@ -11,19 +11,19 @@ Player profiles, achievement showcases, and more.
 
 ### For game developers
 
-openstats has a simple webapi for developers. Developers can track & update achievement progress, and log statistics 
+openstats has a simple webapi for developers. Developers can track & update achievement progress, and log statistics
 such as playtime.
 
 ### For me
 
-I'm tired of being locked into a proprietary game platform. It feels like Steam is the only platform that does 
-achievements & stats somewhat right. It was able to achieve that through its monopolistic saturation as a gaming social 
-network. I don't want Steam to be the only choice players have for simple things like achievement tracking and profile 
+I'm tired of being locked into a proprietary game platform. It feels like Steam is the only platform that does
+achievements & stats somewhat right. It was able to achieve that through its monopolistic saturation as a gaming social
+network. I don't want Steam to be the only choice players have for simple things like achievement tracking and profile
 showcases.
 
 ## Hosting
 
-WIP! Come back some time later™ and I'll have hopefully updated this to include more concrete self-hosting 
+WIP! Come back some time later™ and I'll have hopefully updated this to include more concrete self-hosting
 instructions.
 
 ## In the wild
@@ -45,16 +45,16 @@ Openstats consists of a Go API in `api/`, and a TypeScript Svelte Website in `we
     go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.3
     ```
 6. Install web dependencies
-    ```shell
-    cd web
-    npm i
-    ```
+   ```shell
+   cd web
+   npm i
+   ```
 7. Create `api/.env.local` and `web/.env.local`
    - See `api/.env.local.example` and `web/.env.local.example` for instructions
-    
+
 > [!NOTE]
 > If you see something like `command not found` when trying to use `migrate`, chances are the gopath `go/bin` directory
-> isn't on your `PATH`! This is usually located in your home directory e.g. `C:/Users/YourUserName/go/bin` or 
+> isn't on your `PATH`! This is usually located in your home directory e.g. `C:/Users/YourUserName/go/bin` or
 > `/home/username/go/bin`. See `go help install` for more information.
 
 Further reading:
@@ -93,7 +93,7 @@ Expects the postgres database to be alive. See above.
 In `api` as current working directory.
 
 ```shell
-go run
+go run .
 ```
 
 I recommend using an IDE with Go debugging integration such as VS Code or Jetbrains Goland, and setting up
@@ -128,12 +128,12 @@ go generate
 
 See [Add a SQL Query](#add-a-sql-query) for more information on how we generate models & queries.
 
-### Run migrations 
+### Run migrations
 
 In `api` as current working directory.
 
 ```shell
-migrate -source file://db/migrations -database postgres://openstats:openstats@localhost:15432/openstats?sslmode=disable u
+migrate -source file://db/migrations -database postgres://openstats:openstats@localhost:15432/openstats?sslmode=disable up
 ```
 
 ### Add a SQL Query
@@ -217,4 +217,3 @@ import (
 // ...
     var user query.User, err error = Queries.FindUser(c.Context(), userId)
 ```
-
