@@ -1,0 +1,13 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="Run Local Api" type="GoApplicationRunConfiguration" factoryName="Go Application">
+    <module name="openstats" />
+    <working_directory value="$PROJECT_DIR$/api" />
+    <kind value="DIRECTORY" />
+    <package value="github.com/dresswithpockets/openstats/app" />
+    <directory value="$PROJECT_DIR$/api" />
+    <filePath value="$PROJECT_DIR$" />
+    <method v="2">
+      <option name="RunConfigurationTask" enabled="false" run_configuration_name="Run Database" run_configuration_type="docker-deploy" />
+    </method>
+  </configuration>
+</component>
