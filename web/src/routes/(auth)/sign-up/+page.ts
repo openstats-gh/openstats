@@ -1,13 +1,20 @@
 import type { PageLoad } from "./$types"
-import {api} from "$lib/api";
 import {goto} from "$app/navigation";
+import {Client} from "$lib/internalApi";
+import {redirect} from "@sveltejs/kit";
+import type {Registration} from "$lib/schema";
+
+function assert(condition: any, msg?: string): asserts condition {
+    if (!condition) {
+        throw new Error(msg || "unknown assertion error");
+    }
+}
 
 export const load: PageLoad = async ({ fetch }) => {
-    const session = await api.with(fetch).getCurrentSession()
+    const {error} = await Client.GET("/internal/session/", {fetch: fetch})
 
-    if (session !== null) {
-        // redirect(307, "/")
-        await goto("/")
+    if (!error) {
+        redirect(307, "/")
     }
 
     async function handleSubmit(event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement}) {
@@ -17,23 +24,31 @@ export const load: PageLoad = async ({ fetch }) => {
         const data = new FormData(event.currentTarget)
         const slug = data.get("slug")
         const password = data.get("password")
-        const email = data.get("email")
-        const displayName = data.get("display-name")
+        let email = data.get("email")
+        let displayName = data.get("display-name")
 
-        if (slug === null) {
-            console.error("slug is missing")
-            return
+        assert(typeof slug === "string");
+        assert(typeof password === "string");
+        assert(typeof email === "string");
+        assert(typeof displayName === "string");
+
+        let registration: Registration = {
+            slug: slug,
+            password: password,
         }
 
-        if (password === null) {
-            console.error("password is missing")
-            return
+        if (email.length > 0) {
+            registration.email = email
         }
 
-        let emailValue = email?.toString()
-        let displayNameValue = displayName?.toString()
+        if (displayName.length > 0) {
+            registration.displayName = displayName
+        }
 
-        const result = await api.with(fetch).signUp(slug.toString(), password.toString(), emailValue, displayNameValue)
+        const {error} = await Client.POST("/internal/session/sign-up", {
+            fetch: fetch,
+            body: registration
+        })
 
         // TODO: show result
 

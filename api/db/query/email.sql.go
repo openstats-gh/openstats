@@ -14,7 +14,7 @@ import (
 const addOrGetUserEmail = `-- name: AddOrGetUserEmail :one
 insert into user_email(user_id, email)
 values ($1, $2)
-on conflict (user_email_unique_idx) do nothing
+on conflict (user_id) do nothing
 returning id, created_at, updated_at, user_id, email, confirmed_at
 `
 

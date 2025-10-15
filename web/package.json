@@ -11,7 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
-		"lint": "prettier --check . && eslint ."
+		"lint": "prettier --check . && eslint .",
+		"openapi-typescript": "openapi-typescript http://localhost:3000/openapi.yaml -o src/lib/schema.d.ts --enum --root-types --root-types-no-schema-prefix --make-paths-enum"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.2.5",
@@ -36,6 +37,7 @@
 		"vite": "^7.0.4"
 	},
 	"dependencies": {
-		"openapi-fetch": "^0.14.1"
+		"openapi-fetch": "^0.14.1",
+		"openapi-typescript": "^7.10.1"
 	}
 }
