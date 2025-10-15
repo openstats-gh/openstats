@@ -5,8 +5,7 @@ import {Client} from "$lib/internalApi";
 import {redirect} from "@sveltejs/kit";
 
 export const load: PageLoad = async ({ fetch }) => {
-
-    const {data, error} = await Client.GET("/internal/session/", {fetch: fetch})
+    const {error} = await Client.GET("/internal/session/", {fetch: fetch})
 
     if (!error) {
         redirect(307, "/")
