@@ -882,13 +882,15 @@ export interface components {
              * Format: email
              * @description mutually exclusive with slug
              */
-            email: string;
+            email?: string;
             password: string;
             /**
+             * Slug
              * Format: slug
              * @description mutually exclusive with email
+             * @example silly-slimy-slug
              */
-            slug: string;
+            slug?: string;
         };
         User: {
             /**
