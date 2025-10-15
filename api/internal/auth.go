@@ -156,18 +156,18 @@ func (c ConflictSignUpSlug) ErrorDetail() *huma.ErrorDetail {
 
 type Registration struct {
 	// Email is optional, and just used for resetting the user's password
-	Email string `json:"email" format:"email"`
+	Email string `json:"email,omitempty" format:"email" required:"false"`
 
 	EmailConfirmationSent bool `json:"emailConfirmationSent" readOnly:"true" required:"false"`
 
 	// DisplayName is optional, and is only used when displaying their profile on the website
-	DisplayName *string `json:"displayName" minLength:"1" maxLength:"64" required:"false"`
+	DisplayName string `json:"displayName,omitempty" minLength:"1" maxLength:"64" required:"false"`
 
 	// Slug is a unique username for the user
 	Slug string `json:"slug" format:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
 
 	// Password is the user's login password
-	Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32" writeOnly:"true"`
+	Password string `json:"password,omitempty" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32" writeOnly:"true"`
 }
 
 type SignUpRequest struct {
@@ -183,14 +183,10 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 	if auth.HasPrincipal(ctx) {
 		return nil, huma.Error401Unauthorized("already signed in")
 	}
-	displayName := ""
-	if registerBody.Body.DisplayName != nil {
-		displayName = *registerBody.Body.DisplayName
-	}
 
 	createdUser, newUserError := auth.AddNewUser(
 		ctx,
-		displayName,
+		registerBody.Body.DisplayName,
 		registerBody.Body.Email,
 		registerBody.Body.Slug,
 		registerBody.Body.Password,

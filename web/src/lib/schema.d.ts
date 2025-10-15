@@ -546,7 +546,7 @@ export interface components {
             email: string;
         };
         Developer: {
-            readonly friendlyName: string;
+            readonly friendlyName?: string;
         };
         EmailValidationResult: {
             /**
@@ -691,7 +691,7 @@ export interface components {
             readonly $schema?: string;
             comment: string;
             /** Format: date-time */
-            readonly createdAt: string;
+            readonly createdAt?: string;
             /** Format: date-time */
             expiresAt: string;
             game: components["schemas"]["InternalGame"];
@@ -701,7 +701,7 @@ export interface components {
              * @description A type-safe UUID. Prefix indicates Resource type, suffix is a base62 encoded UUIDv7.
              * @example u_AZhjuMmhePWkHFALenFEfg
              */
-            readonly rid: string;
+            readonly rid?: string;
         };
         GameTokenList: {
             /**
@@ -714,7 +714,7 @@ export interface components {
         };
         InternalGame: {
             readonly developer?: components["schemas"]["Developer"];
-            readonly friendlyName: string;
+            readonly friendlyName?: string;
             /**
              * RID
              * Format: rid
@@ -735,7 +735,7 @@ export interface components {
              * @description A type-safe UUID. Prefix indicates Resource type, suffix is a base62 encoded UUIDv7.
              * @example u_AZhjuMmhePWkHFALenFEfg
              */
-            readonly rid: string;
+            readonly rid?: string;
             slug?: string;
         };
         InternalUserList: {
@@ -803,9 +803,9 @@ export interface components {
              * @example https://example.com/schemas/Registration.json
              */
             readonly $schema?: string;
-            displayName?: string | null;
+            displayName?: string;
             /** Format: email */
-            email: string;
+            email?: string;
             readonly emailConfirmationSent?: boolean;
             password: string;
             /** Format: slug */

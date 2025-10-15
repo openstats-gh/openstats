@@ -407,12 +407,12 @@ func HandleChangePassword(ctx context.Context, input *ChangePasswordInput) (outp
 }
 
 type InternalUser struct {
-	RID         rid.RID       `json:"rid" readOnly:"true"`
-	CreatedAt   time.Time     `json:"createdAt,omitempty" readOnly:"true"`
+	RID         rid.RID       `json:"rid" readOnly:"true" required:"false"`
+	CreatedAt   time.Time     `json:"createdAt,omitempty" readOnly:"true" required:"false"`
 	Slug        *string       `json:"slug,omitempty"`
 	DisplayName *string       `json:"displayName,omitempty"`
 	BioText     *string       `json:"bioText,omitempty"`
-	Avatar      *users.Avatar `json:"avatar,omitempty" readOnly:"true"`
+	Avatar      *users.Avatar `json:"avatar,omitempty" readOnly:"true" required:"false"`
 }
 
 type ProfileUnlockedAchievements struct {
@@ -437,7 +437,7 @@ func (i *ProfileUnlockedAchievements) MapFromRow(row query.GetUserRecentAchievem
 
 type ProfileOtherUserUnlockedAchievements struct {
 	ProfileUnlockedAchievements
-	User InternalUser `json:"user" readOnly:"true"`
+	User InternalUser `json:"user" readOnly:"true" required:"false"`
 }
 
 func (i *ProfileOtherUserUnlockedAchievements) MapFromRow(row query.GetOtherUserRecentAchievementsRow) {
@@ -571,18 +571,18 @@ const GameRidPrefix = "g"
 const GameTokenRidPrefix = "gt"
 
 type Developer struct {
-	FriendlyName string `json:"friendlyName" readOnly:"true"`
+	FriendlyName string `json:"friendlyName" readOnly:"true" required:"false"`
 }
 
 type InternalGame struct {
 	RID          rid.RID   `json:"rid"`
-	Developer    Developer `json:"developer,omitempty" readOnly:"true"`
-	FriendlyName string    `json:"friendlyName" readOnly:"true"`
+	Developer    Developer `json:"developer,omitempty" readOnly:"true" required:"false"`
+	FriendlyName string    `json:"friendlyName" readOnly:"true" required:"false"`
 }
 
 type GameToken struct {
-	RID       rid.RID      `json:"rid" readOnly:"true"`
-	CreatedAt time.Time    `json:"createdAt" readOnly:"true"`
+	RID       rid.RID      `json:"rid" readOnly:"true" required:"false"`
+	CreatedAt time.Time    `json:"createdAt" readOnly:"true" required:"false"`
 	ExpiresAt time.Time    `json:"expiresAt"`
 	Comment   string       `json:"comment"`
 	Game      InternalGame `json:"game"`
