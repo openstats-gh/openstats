@@ -1,8 +1,6 @@
-
-
-import type { paths } from "$lib/schema"
-import createClient from "openapi-fetch"
+import type { paths } from "$lib/schema";
+import createClient from "openapi-fetch";
 
 export const Client = createClient<paths>({
-    baseUrl: "http://localhost:3000/"
-})
+  baseUrl: "http://localhost:5173/",
+});
