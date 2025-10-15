@@ -5,6 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/dresswithpockets/openstats/app/auth"
 	"github.com/dresswithpockets/openstats/app/db"
@@ -14,25 +17,66 @@ import (
 	"github.com/dresswithpockets/openstats/app/password"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/rotisserie/eris"
-	"net/http"
-	"time"
 )
 
-type SignInRequest struct {
-	Body struct {
-		// Slug is a unique username for the user
-		Slug string `json:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+type Slug string
 
-		// Password is the user's login password
-		Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+func (s *Slug) Schema(_ huma.Registry) *huma.Schema {
+	return &huma.Schema{
+		Type:               huma.TypeString,
+		Title:              "Slug",
+		Description:        "A human-readable identifier for a resource, such as a User or a Game",
+		Pattern:            "[a-z0-9-]+",
+		PatternDescription: "lowercase-alphanum with dashes",
+		Format:             "slug",
+		Examples:           []any{"silly-slimy-slug"},
 	}
 }
 
-type SignInResponse struct {
+func (s *Slug) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
+	if validation.ValidSlug(string(*s)) {
+		return nil
+	}
+
+	return []error{&huma.ErrorDetail{
+		Location: prefix.String(),
+		Message:  "invalid slug",
+		Value:    *s,
+	}}
+}
+
+type SignInBody struct {
+	Email    string `json:"email" format:"email" doc:"mutually exclusive with slug"`
+	Slug     string `json:"slug" format:"slug" doc:"mutually exclusive with email" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+	Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
+}
+
+func (s *SignInBody) Resolve(ctx huma.Context) []error {
+	if len(s.Slug) > 0 && len(s.Email) > 0 {
+		return []error{&huma.ErrorDetail{
+			Location: "path.slug",
+			Message:  "If email is provided, slug cannot be provided",
+			Value:    s.Slug,
+		}}
+	}
+
+	return nil
+}
+
+var SlugMinLength int = 2
+var SlugMaxLength int = 64
+var PasswordMinLength int = 10
+var PasswordMaxLength int = 64
+
+type SignInInput struct {
+	Body SignInBody
+}
+
+type SignInOutput struct {
 	SetCookie http.Cookie `header:"Set-Cookie"`
 }
 
-func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInResponse, error) {
+func HandlePostSignIn(ctx context.Context, loginBody *SignInInput) (*SignInOutput, error) {
 	result, findErr := db.Queries.FindUserBySlugWithPassword(ctx, loginBody.Body.Slug)
 	if errors.Is(findErr, sql.ErrNoRows) {
 		return nil, huma.Error404NotFound("slug or password don't match")
@@ -56,7 +100,7 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInRequest) (*SignInRes
 		return nil, createErr
 	}
 
-	return &SignInResponse{
+	return &SignInOutput{
 		SetCookie: http.Cookie{
 			Name:     auth.SessionCookieName,
 			Path:     "/",
