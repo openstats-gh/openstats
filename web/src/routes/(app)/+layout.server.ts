@@ -1,16 +1,12 @@
-import type { LayoutServerLoad } from './$types';
-import {Client} from "$lib/internalApi";
+import { redirect } from "@sveltejs/kit";
+import type { LayoutServerLoad } from "./$types";
 
-export const load: LayoutServerLoad = async({ fetch }) => {
-    const { data, error } = await Client.GET("/internal/session/", {
-        fetch: fetch
-    })
+export const load: LayoutServerLoad = ({ locals }) => {
+  if (!locals.session) {
+    redirect(302, "/welcome");
+  }
 
-    if (error && error.status !== 401) {
-        console.error("Error getting session", error)
-    }
-
-    return {
-        session: data
-    }
-}
+  return {
+    session: locals.session,
+  };
+};

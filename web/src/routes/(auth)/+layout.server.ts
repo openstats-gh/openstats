@@ -1,7 +1,12 @@
-import type { LayoutServerLoad } from './$types';
-import { api } from '$lib/api';
-import {redirect} from "@sveltejs/kit";
+import { redirect } from "@sveltejs/kit";
+import type { LayoutServerLoad } from "./$types";
 
-export const load: LayoutServerLoad = async ({ fetch }) => {
+export const load: LayoutServerLoad = ({ locals }) => {
+  if (locals.session) {
+    redirect(302, "/");
+  }
 
-}
+  return {
+    session: locals.session,
+  };
+};

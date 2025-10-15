@@ -43,3 +43,4 @@ go.work.sum
 # ignore bobgen generated files
 *.bob.*
 *.bob_test.*
+web/package-lock.json

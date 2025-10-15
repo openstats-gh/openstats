@@ -1,12 +1,30 @@
-import config from '$lib/config';
-import type { Handle } from '@sveltejs/kit';
+import config from "$lib/config";
+import { Client } from "$lib/internalApi";
+import type { Handle } from "@sveltejs/kit";
 
 export const handle: Handle = async ({ event, resolve }) => {
-  if (event.url.pathname.startsWith("/api")) {
-    const newPath = event.url.pathname.substring("/api".length)
-    console.log("/api request: " + newPath);
-    return await fetch(new URL(newPath, config.apiBaseUrl), event.request)
+  if (event.url.pathname.startsWith("/internal")) {
+    const result = await fetch(new URL(event.url.pathname, config.apiBaseUrl), event.request);
+    return result;
   }
 
-  return await resolve(event);
+  if (!event.locals.session) {
+    const { data, error } = await Client.GET("/internal/session/", {
+      baseUrl: config.apiBaseUrl,
+      headers: event.request.headers,
+      credentials: "include",
+    });
+
+    if (!error) {
+      event.locals.session = data;
+    } else if (error.status !== 401) {
+      console.error("There was an error retrieving the session", error);
+    }
+  }
+
+  return await resolve(event, {
+    filterSerializedResponseHeaders(name) {
+      return name === "content-length";
+    },
+  });
 };
