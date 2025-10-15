@@ -109,6 +109,16 @@ In `web` as current working directory.
 npm run dev
 ```
 
+### Generate the OpenAPI-Typescript `schema.d.ts`:
+
+Expects the API to be alive. See above.
+
+In `web` as current working directory.
+
+```bash
+npm run openapi-typescript
+```
+
 ### Create a migration
 
 In `api` as current working directory.
