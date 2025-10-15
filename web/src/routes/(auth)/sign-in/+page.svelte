@@ -3,7 +3,7 @@
   import CircleSlash from "@lucide/svelte/icons/circle-slash";
   import { Client } from "$lib/internalApi.js";
   import { goto } from "$app/navigation";
-  import type { ErrorDetail } from "$lib/schema.js";
+  import type { ErrorDetail, Registration, SignInRequestBody } from "$lib/schema.js";
 
   let register = $state(false);
   let formErrors: ErrorDetail[] = $state([]);
@@ -15,9 +15,9 @@
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const postData = {
-      password: formData.get("password") as string,
-      slug: formData.get("slug-or-email") as string,
+    const postData: SignInRequestBody = {
+      password: formData.get("password")?.toString() ?? "",
+      slug: formData.get("slug-or-email")?.toString() ?? "",
     };
 
     const { error } = await Client.POST("/internal/session/sign-in", {
@@ -40,12 +40,11 @@
 
     // spiritov - todo: ahh erm i shouldn't have to provide emailConfirmationSent..
     const formData = new FormData(event.currentTarget);
-    const postData = {
-      displayName: formData.get("displayname") as string,
-      email: formData.get("email") as string,
-      emailConfirmationSent: false,
-      password: formData.get("password") as string,
-      slug: formData.get("slug-or-email") as string,
+    const postData: Registration = {
+      displayName: formData.get("displayname")?.toString() ?? "",
+      email: formData.get("email")?.toString() ?? "",
+      password: formData.get("password")?.toString() ?? "",
+      slug: formData.get("slug-or-email")?.toString() ?? "",
     };
 
     const { error } = await Client.POST("/internal/session/sign-up", {
