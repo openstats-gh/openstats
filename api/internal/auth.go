@@ -22,6 +22,8 @@ import (
 type Slug string
 
 func (s *Slug) Schema(_ huma.Registry) *huma.Schema {
+	minLength := 2
+	maxLength := 64
 	return &huma.Schema{
 		Type:               huma.TypeString,
 		Title:              "Slug",
@@ -30,6 +32,8 @@ func (s *Slug) Schema(_ huma.Registry) *huma.Schema {
 		PatternDescription: "lowercase-alphanum with dashes",
 		Format:             "slug",
 		Examples:           []any{"silly-slimy-slug"},
+		MinLength:          &minLength,
+		MaxLength:          &maxLength,
 	}
 }
 
@@ -46,12 +50,20 @@ func (s *Slug) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
 }
 
 type SignInBody struct {
-	Email    string `json:"email" format:"email" doc:"mutually exclusive with slug"`
-	Slug     string `json:"slug" format:"slug" doc:"mutually exclusive with email" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
+	Email    string `json:"email" format:"email" doc:"mutually exclusive with slug" required:"false"`
+	Slug     Slug   `json:"slug" doc:"mutually exclusive with email" required:"false"`
 	Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
 }
 
 func (s *SignInBody) Resolve(ctx huma.Context) []error {
+	if len(s.Slug) == 0 && len(s.Email) == 0 {
+		return []error{&huma.ErrorDetail{
+			Location: "path.email",
+			Message:  "Slug or email must be provided",
+			Value:    s.Email,
+		}}
+	}
+
 	if len(s.Slug) > 0 && len(s.Email) > 0 {
 		return []error{&huma.ErrorDetail{
 			Location: "path.slug",
@@ -77,7 +89,7 @@ type SignInOutput struct {
 }
 
 func HandlePostSignIn(ctx context.Context, loginBody *SignInInput) (*SignInOutput, error) {
-	result, findErr := db.Queries.FindUserBySlugWithPassword(ctx, loginBody.Body.Slug)
+	result, findErr := db.Queries.FindUserBySlugWithPassword(ctx, string(loginBody.Body.Slug))
 	if errors.Is(findErr, sql.ErrNoRows) {
 		return nil, huma.Error404NotFound("slug or password don't match")
 	}
