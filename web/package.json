@@ -37,6 +37,7 @@
 		"vite": "^7.0.4"
 	},
 	"dependencies": {
+		"@lucide/svelte": "^0.545.0",
 		"openapi-fetch": "^0.14.1"
 	}
 }
