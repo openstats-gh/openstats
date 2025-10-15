@@ -1,7 +1,7 @@
 -- name: AddOrGetUserEmail :one
 insert into user_email(user_id, email)
 values (@user_id, @email)
-on conflict (user_email_unique_idx) do nothing
+on conflict (user_id) do nothing
 returning *;
 
 -- name: AddUserEmailByUuid :exec
