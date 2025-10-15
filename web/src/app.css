@@ -29,6 +29,6 @@
   }
 
   button {
-    @apply w-fit rounded-md border-b-2 border-ctp-red-700 bg-ctp-red-500 px-2 py-1 text-zinc-900 transition-colors hover:cursor-pointer hover:bg-ctp-red-400 focus:bg-ctp-red-400 focus:outline-0;
+    @apply w-fit rounded-md border-b-1 border-ctp-red-700 bg-ctp-red-500 px-2 py-1 text-zinc-900 transition-colors hover:cursor-pointer hover:bg-ctp-red-400 focus:bg-ctp-red-400 focus:outline-0;
   }
 }
