@@ -114,10 +114,10 @@ type Registration struct {
 	// Email is optional, and just used for resetting the user's password
 	Email string `json:"email" format:"email"`
 
-	EmailConfirmationSent bool `json:"emailConfirmationSent" readOnly:"true"`
+	EmailConfirmationSent bool `json:"emailConfirmationSent" readOnly:"true" required:"false"`
 
 	// DisplayName is optional, and is only used when displaying their profile on the website
-	DisplayName string `json:"displayName" minLength:"1" maxLength:"64"`
+	DisplayName *string `json:"displayName" minLength:"1" maxLength:"64" required:"false"`
 
 	// Slug is a unique username for the user
 	Slug string `json:"slug" format:"slug" required:"true" pattern:"[a-z0-9-]+" patternDescription:"lowercase-alphanum with dashes" minLength:"2" maxLength:"64"`
@@ -139,10 +139,14 @@ func HandlePostSignUp(ctx context.Context, registerBody *SignUpRequest) (*SignUp
 	if auth.HasPrincipal(ctx) {
 		return nil, huma.Error401Unauthorized("already signed in")
 	}
+	displayName := ""
+	if registerBody.Body.DisplayName != nil {
+		displayName = *registerBody.Body.DisplayName
+	}
 
 	createdUser, newUserError := auth.AddNewUser(
 		ctx,
-		registerBody.Body.DisplayName,
+		displayName,
 		registerBody.Body.Email,
 		registerBody.Body.Slug,
 		registerBody.Body.Password,
