@@ -91,7 +91,7 @@ type SignInOutput struct {
 func HandlePostSignIn(ctx context.Context, loginBody *SignInInput) (*SignInOutput, error) {
 	result, findErr := db.Queries.FindUserBySlugWithPassword(ctx, string(loginBody.Body.Slug))
 	if errors.Is(findErr, sql.ErrNoRows) {
-		return nil, huma.Error404NotFound("slug or password don't match")
+		return nil, huma.Error404NotFound("credentials don't match")
 	}
 
 	if findErr != nil {
@@ -100,7 +100,7 @@ func HandlePostSignIn(ctx context.Context, loginBody *SignInInput) (*SignInOutpu
 
 	verifyErr := password.VerifyPassword(loginBody.Body.Password, result.EncodedHash)
 	if errors.Is(verifyErr, password.ErrHashMismatch) {
-		return nil, huma.Error404NotFound("slug or password don't match")
+		return nil, huma.Error404NotFound("credentials don't match")
 	}
 
 	if verifyErr != nil {
