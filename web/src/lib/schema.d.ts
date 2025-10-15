@@ -546,7 +546,7 @@ export interface components {
             email: string;
         };
         Developer: {
-            readonly friendlyName: string;
+            readonly friendlyName?: string;
         };
         EmailValidationResult: {
             /**
@@ -691,7 +691,7 @@ export interface components {
             readonly $schema?: string;
             comment: string;
             /** Format: date-time */
-            readonly createdAt: string;
+            readonly createdAt?: string;
             /** Format: date-time */
             expiresAt: string;
             game: components["schemas"]["InternalGame"];
@@ -701,7 +701,7 @@ export interface components {
              * @description A type-safe UUID. Prefix indicates Resource type, suffix is a base62 encoded UUIDv7.
              * @example u_AZhjuMmhePWkHFALenFEfg
              */
-            readonly rid: string;
+            readonly rid?: string;
         };
         GameTokenList: {
             /**
@@ -714,7 +714,7 @@ export interface components {
         };
         InternalGame: {
             readonly developer?: components["schemas"]["Developer"];
-            readonly friendlyName: string;
+            readonly friendlyName?: string;
             /**
              * RID
              * Format: rid
@@ -735,7 +735,7 @@ export interface components {
              * @description A type-safe UUID. Prefix indicates Resource type, suffix is a base62 encoded UUIDv7.
              * @example u_AZhjuMmhePWkHFALenFEfg
              */
-            readonly rid: string;
+            readonly rid?: string;
             slug?: string;
         };
         InternalUserList: {
@@ -803,10 +803,10 @@ export interface components {
              * @example https://example.com/schemas/Registration.json
              */
             readonly $schema?: string;
-            displayName: string;
+            displayName?: string;
             /** Format: email */
-            email: string;
-            readonly emailConfirmationSent: boolean;
+            email?: string;
+            readonly emailConfirmationSent?: boolean;
             password: string;
             /** Format: slug */
             slug: string;
@@ -871,14 +871,23 @@ export interface components {
             displayName: string;
             slug: string;
         };
-        SignInRequestBody: {
+        SignInBody: {
             /**
              * Format: uri
              * @description A URL to the JSON Schema for this object.
-             * @example https://example.com/schemas/SignInRequestBody.json
+             * @example https://example.com/schemas/SignInBody.json
              */
             readonly $schema?: string;
+            /**
+             * Format: email
+             * @description mutually exclusive with slug
+             */
+            email: string;
             password: string;
+            /**
+             * Format: slug
+             * @description mutually exclusive with email
+             */
             slug: string;
         };
         User: {
@@ -984,7 +993,7 @@ export type SendEmailConfInputBody = components['schemas']['SendEmailConfInputBo
 export type SendPasswordResetInputBody = components['schemas']['SendPasswordResetInputBody'];
 export type SendSlugReminderInputBody = components['schemas']['SendSlugReminderInputBody'];
 export type SessionResponseBody = components['schemas']['SessionResponseBody'];
-export type SignInRequestBody = components['schemas']['SignInRequestBody'];
+export type SignInBody = components['schemas']['SignInBody'];
 export type User = components['schemas']['User'];
 export type UserList = components['schemas']['UserList'];
 export type UserProfile = components['schemas']['UserProfile'];
@@ -1656,7 +1665,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SignInRequestBody"];
+                "application/json": components["schemas"]["SignInBody"];
             };
         };
         responses: {
