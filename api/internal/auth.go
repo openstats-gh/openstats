@@ -38,7 +38,7 @@ func (s *Slug) Schema(_ huma.Registry) *huma.Schema {
 }
 
 func (s *Slug) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
-	if validation.ValidSlug(string(*s)) {
+	if len(*s) == 0 || validation.ValidSlug(string(*s)) {
 		return nil
 	}
 
@@ -51,7 +51,7 @@ func (s *Slug) Resolve(ctx huma.Context, prefix *huma.PathBuffer) []error {
 
 type SignInBody struct {
 	Email    string `json:"email" format:"email" doc:"mutually exclusive with slug" required:"false"`
-	Slug     Slug   `json:"slug" doc:"mutually exclusive with email" required:"false"`
+	Slug     Slug   `json:"slug,omitempty" doc:"mutually exclusive with email" required:"false"`
 	Password string `json:"password" required:"true" pattern:"[a-zA-Z0-9!@#$%^&*]+" patternDescription:"alphanum with specials" minLength:"10" maxLength:"32"`
 }
 
