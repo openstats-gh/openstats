@@ -6,7 +6,20 @@
   import openstatsico from "$lib/assets/favicon.ico";
 
   let { page }: { page: string } = $props();
-  $inspect(page);
+
+  import { Client } from "$lib/internalApi";
+  import { goto } from "$app/navigation";
+
+  async function handleSignout() {
+    const { error } = await Client.POST("/internal/session/sign-out", {
+      fetch: fetch,
+    });
+    if (!error) {
+      goto("/sign-in");
+    } else {
+      console.error("error signing out: ", error);
+    }
+  }
 </script>
 
 <nav
@@ -21,7 +34,14 @@
     </div>
     <!-- right nav -->
     <div class="flex flex-row-reverse">
-      {@render navIcon(LogOut, "sign-out")}
+      <button
+        onclick={() => handleSignout()}
+        class="nav-block size-14 before:opacity-0 before:transition-opacity hover:before:opacity-60"
+      >
+        <span class="nav-span p-1">
+          <LogOut />
+        </span>
+      </button>
       {@render navIcon(Settings, "settings")}
       {@render navIcon(User, "profile")}
     </div>
@@ -31,15 +51,14 @@
 {#snippet navPage(route: string)}
   <a
     href="/{route}"
-    class="relative flex h-14 cursor-pointer items-center justify-center font-semibold before:absolute before:size-full before:border-b-2 {page ===
-    route
+    class="nav-block h-14 {page === route
       ? ''
       : 'before:opacity-0 before:transition-opacity hover:before:opacity-60'}"
   >
     {#if route === ""}
       <img src={openstatsico} alt="openstats" class="size-10 w-full px-1" />
     {:else}
-      <span class="flex items-center justify-center rounded-md px-4">
+      <span class="nav-span px-4">
         {route}
       </span>
     {/if}
@@ -49,21 +68,24 @@
 {#snippet navIcon(Icon: Component, route: string)}
   <a
     href="/{route}"
-    class="relative flex size-14 cursor-pointer items-center justify-center before:absolute before:size-full before:border-b-2 {page ===
-    route
+    class="nav-block size-14 {page === route
       ? ''
       : 'before:opacity-0 before:transition-opacity hover:before:opacity-60'}"
   >
-    <span class="flex items-center justify-center rounded-md p-1">
+    <span class="nav-span p-1">
       <Icon />
     </span>
   </a>
 {/snippet}
 
 <style lang="postcss">
-  @reference "../../app.css"
+  @reference "../../app.css";
 
-  .nav-page {
-    @apply;
+  .nav-block {
+    @apply relative flex cursor-pointer items-center justify-center before:absolute before:size-full before:border-b-2;
+  }
+
+  .nav-span {
+    @apply flex items-center justify-center rounded-md;
   }
 </style>
