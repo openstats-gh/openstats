@@ -29,8 +29,10 @@
     <!-- left nav -->
     <div class="flex">
       {@render navPage("")}
-      {@render navPage("players")}
-      {@render navPage("games")}
+      {#if session}
+        {@render navPage("players")}
+        {@render navPage("games")}
+      {/if}
     </div>
     <!-- right nav -->
     <div class="flex flex-row-reverse">

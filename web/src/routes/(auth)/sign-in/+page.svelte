@@ -106,7 +106,7 @@
             />
           </div>
         {/if}
-        <button type="submit" class="w-full rounded-t-none"
+        <button type="submit" class="text-button w-full rounded-t-none"
           >{register ? "Register" : "Login"}</button
         >
         {#each formErrors as fe}
@@ -124,17 +124,9 @@
       <span class="h-full">{register ? "Have an account?" : "Need an account?"}</span>
       <button
         onclick={() => (register = !register)}
-        class="opacity-75 transition-opacity hover:opacity-100"
+        class="text-button opacity-75 transition-opacity hover:opacity-100"
         >{register ? "Login" : "Register"}</button
       >
     </div>
   </div>
 </div>
-
-<style lang="postcss">
-  @reference "../../../app.css";
-
-  button {
-    @apply border-b-1 border-ctp-red-700 bg-ctp-red-500 hover:bg-ctp-red-400 focus:bg-ctp-red-400 w-fit rounded-md px-2 py-1 text-zinc-900 transition-colors hover:cursor-pointer focus:outline-0;
-  }
-</style>
