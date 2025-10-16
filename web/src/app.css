@@ -27,8 +27,4 @@
   input {
     @apply border-1 border-zinc-600 bg-zinc-700 bg-clip-border p-2 transition-colors hover:bg-zinc-800 focus:bg-zinc-800 focus:outline-0;
   }
-
-  button {
-    @apply w-fit rounded-md border-b-1 border-ctp-red-700 bg-ctp-red-500 px-2 py-1 text-zinc-900 transition-colors hover:cursor-pointer hover:bg-ctp-red-400 focus:bg-ctp-red-400 focus:outline-0;
-  }
 }

@@ -4,7 +4,7 @@
   import { Client } from "$lib/internalApi.js";
   import { goto } from "$app/navigation";
   import type { ErrorDetail, Registration, SignInBody } from "$lib/schema.js";
-  import { assert } from "$lib/functions/typescript";
+  import { assert } from "$lib/assert";
 
   let register = $state(false);
   let formErrors: ErrorDetail[] = $state([]);
@@ -130,3 +130,11 @@
     </div>
   </div>
 </div>
+
+<style lang="postcss">
+  @reference "../../../app.css";
+
+  button {
+    @apply border-b-1 border-ctp-red-700 bg-ctp-red-500 hover:bg-ctp-red-400 focus:bg-ctp-red-400 w-fit rounded-md px-2 py-1 text-zinc-900 transition-colors hover:cursor-pointer focus:outline-0;
+  }
+</style>
