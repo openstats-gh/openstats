@@ -125,7 +125,7 @@
       <button
         onclick={() => (register = !register)}
         class="text-button opacity-75 transition-opacity hover:opacity-100"
-        >{register ? "Login" : "Register"}</button
+        >{register ? "Sign in" : "Register"}</button
       >
     </div>
   </div>
