@@ -3,6 +3,7 @@
   import type { PageProps } from "./$types";
 
   const { data }: PageProps = $props();
+  const page = "";
 </script>
 
-<Nav />
+<Nav {page} />
