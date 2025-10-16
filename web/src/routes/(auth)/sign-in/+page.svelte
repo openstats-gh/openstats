@@ -3,7 +3,8 @@
   import CircleSlash from "@lucide/svelte/icons/circle-slash";
   import { Client } from "$lib/internalApi.js";
   import { goto } from "$app/navigation";
-  import type { ErrorDetail, Registration, SignInRequestBody } from "$lib/schema.js";
+  import type { ErrorDetail, Registration, SignInBody } from "$lib/schema.js";
+  import { assert } from "$lib/functions/typescript";
 
   let register = $state(false);
   let formErrors: ErrorDetail[] = $state([]);
@@ -15,14 +16,20 @@
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
-    const postData: SignInRequestBody = {
-      password: formData.get("password")?.toString() ?? "",
-      slug: formData.get("slug-or-email")?.toString() ?? "",
+    const password = formData.get("password");
+    const slug = formData.get("slug-or-email");
+
+    assert(typeof password === "string");
+    assert(typeof slug === "string");
+
+    const formBody: SignInBody = {
+      password: password,
+      slug: slug,
     };
 
     const { error } = await Client.POST("/internal/session/sign-in", {
       fetch: fetch,
-      body: postData,
+      body: formBody,
     });
 
     // 204: signed in
@@ -38,18 +45,26 @@
   ) {
     event.preventDefault();
 
-    // spiritov - todo: ahh erm i shouldn't have to provide emailConfirmationSent..
     const formData = new FormData(event.currentTarget);
-    const postData: Registration = {
-      displayName: formData.get("displayname")?.toString() ?? "",
-      email: formData.get("email")?.toString() ?? "",
-      password: formData.get("password")?.toString() ?? "",
-      slug: formData.get("slug-or-email")?.toString() ?? "",
-    };
+    const displayName = formData.get("displayname");
+    const email = formData.get("email");
+    const password = formData.get("password");
+    const slug = formData.get("slug-or-email");
 
+    assert(typeof displayName === "string");
+    assert(typeof email === "string");
+    assert(typeof password === "string");
+    assert(typeof slug === "string");
+
+    const formBody: Registration = {
+      displayName: displayName,
+      email: email,
+      password: password,
+      slug: slug,
+    };
     const { error } = await Client.POST("/internal/session/sign-up", {
       fetch: fetch,
-      body: postData,
+      body: formBody,
     });
 
     // 200: signed up?, or need to confirm email
