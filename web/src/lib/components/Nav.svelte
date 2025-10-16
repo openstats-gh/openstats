@@ -2,13 +2,13 @@
   import LogOut from "@lucide/svelte/icons/log-out";
   import Settings from "@lucide/svelte/icons/settings";
   import User from "@lucide/svelte/icons/user";
-  import type { Component } from "svelte";
-  import openstatsico from "$lib/assets/favicon.ico";
-
-  let { page }: { page: string } = $props();
-
   import { Client } from "$lib/internalApi";
   import { goto } from "$app/navigation";
+  import openstatsico from "$lib/assets/favicon.ico";
+  import type { Component } from "svelte";
+  import type { SessionResponseBody } from "$lib/schema";
+
+  let { page, session = null }: { page: string; session?: SessionResponseBody | null } = $props();
 
   async function handleSignout() {
     const { error } = await Client.POST("/internal/session/sign-out", {
@@ -34,16 +34,20 @@
     </div>
     <!-- right nav -->
     <div class="flex flex-row-reverse">
-      <button
-        onclick={() => handleSignout()}
-        class="nav-block size-14 before:opacity-0 before:transition-opacity hover:before:opacity-60"
-      >
-        <span class="nav-span p-1">
-          <LogOut />
-        </span>
-      </button>
-      {@render navIcon(Settings, "settings")}
-      {@render navIcon(User, "profile")}
+      {#if session}
+        <button
+          onclick={() => handleSignout()}
+          class="nav-block size-14 before:opacity-0 before:transition-opacity hover:before:opacity-60"
+        >
+          <span class="nav-span p-1">
+            <LogOut />
+          </span>
+        </button>
+        {@render navIcon(Settings, "settings")}
+        {@render navIcon(User, "profile")}
+      {:else}
+        <a href="/sign-in" class="text-button"> Sign in or Register </a>
+      {/if}
     </div>
   </div>
 </nav>

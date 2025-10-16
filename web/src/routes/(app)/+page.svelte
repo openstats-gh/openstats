@@ -6,4 +6,4 @@
   const page = "";
 </script>
 
-<Nav {page} />
+<Nav {page} session={data.session} />
