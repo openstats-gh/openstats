@@ -173,18 +173,6 @@ func RegisterRoutes(api huma.API) {
 	}, HandleChangePassword)
 
 	huma.Register(sessionApi, huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/profile",
-		OperationID: "get-session-profile",
-		Summary:     "Get user's profile",
-		Description: "Get profile of current authenticated user",
-		Errors:      []int{http.StatusUnauthorized},
-
-		Security:    sessionCookieSecurityMap,
-		Middlewares: requireUserSessionMiddlewares,
-	}, HandleGetSessionProfile)
-
-	huma.Register(sessionApi, huma.Operation{
 		Method:      http.MethodPost,
 		Path:        "/profile",
 		OperationID: "update-session-profile",
@@ -459,27 +447,6 @@ func (i *ProfileOtherUserUnlockedAchievements) MapFromRow(row query.GetOtherUser
 			Avatar:      nil,
 		},
 	}
-}
-
-type GetSessionResponse struct {
-	Body UserProfile
-}
-
-func HandleGetSessionProfile(ctx context.Context, _ *struct{}) (*GetSessionResponse, error) {
-	principal, hasPrincipal := auth.GetPrincipal(ctx)
-	if !hasPrincipal {
-		// shouldn't ever get here due to middleware check
-		return nil, huma.Error401Unauthorized("no session")
-	}
-
-	userUuid := principal.User.Uuid
-
-	profile, err := GetUserProfile(ctx, userUuid)
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetSessionResponse{Body: profile}, nil
 }
 
 type PostSessionRequest struct {
