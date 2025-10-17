@@ -22,6 +22,7 @@
 
   h3 {
     font-size: 1.17rem;
+    color: theme(--color-ctp-red);
   }
 
   input {
