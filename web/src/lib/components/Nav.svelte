@@ -8,7 +8,7 @@
   import type { Component } from "svelte";
   import type { SessionResponseBody } from "$lib/schema";
 
-  let { page, session = null }: { page: string; session?: SessionResponseBody | null } = $props();
+  let { route, session = null }: { route: string; session?: SessionResponseBody | null } = $props();
 
   async function handleSignout() {
     const { error } = await Client.POST("/internal/session/sign-out", {
@@ -46,7 +46,7 @@
           </span>
         </button>
         {@render navIcon(Settings, "settings")}
-        {@render navIcon(User, "profile")}
+        {@render navIcon(User, `players/${session.slug}`)}
       {:else}
         <a href="/sign-in" class="text-button"> Sign in or Register </a>
       {/if}
@@ -54,27 +54,29 @@
   </div>
 </nav>
 
-{#snippet navPage(route: string)}
+<hr class="h-14" />
+
+{#snippet navPage(page: string)}
   <a
-    href="/{route}"
-    class="nav-block h-14 {page === route
+    href="/{page}"
+    class="nav-block h-14 {`/${page}` === route
       ? ''
       : 'before:opacity-0 before:transition-opacity hover:before:opacity-60'}"
   >
-    {#if route === ""}
+    {#if page === ""}
       <img src={openstatsico} alt="openstats" class="size-10 w-full px-1" />
     {:else}
       <span class="nav-span px-4">
-        {route}
+        {page}
       </span>
     {/if}
   </a>
 {/snippet}
 
-{#snippet navIcon(Icon: Component, route: string)}
+{#snippet navIcon(Icon: Component, page: string)}
   <a
-    href="/{route}"
-    class="nav-block size-14 {page === route
+    href="/{page}"
+    class="nav-block size-14 {`/${page}` === route
       ? ''
       : 'before:opacity-0 before:transition-opacity hover:before:opacity-60'}"
   >
