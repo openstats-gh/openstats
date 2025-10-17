@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/danielgtaylor/huma/v2"
-	"github.com/dresswithpockets/openstats/app/rid"
-	"github.com/google/uuid"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/danielgtaylor/huma/v2"
+	"github.com/dresswithpockets/openstats/app/rid"
+	"github.com/google/uuid"
 )
 
 type EpochTime uint64
@@ -117,11 +118,11 @@ type SlugOrRID struct {
 func (s *SlugOrRID) Schema(_ huma.Registry) *huma.Schema {
 	return &huma.Schema{
 		Type:        "string",
-		Title:       "Resource Matcher",
+		Title:       "Slug Or RID",
 		Description: "A string which can either be a resource's slug or a resource's RID",
-		Format:      "resource-matcher",
+		Format:      "slug-or-rid",
 		Examples: []any{
-			"a-valid-slug",
+			"silly-little-slug",
 			"u_AZhjuMmhePWkHFALenFEfg",
 		},
 	}
