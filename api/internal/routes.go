@@ -173,18 +173,6 @@ func RegisterRoutes(api huma.API) {
 	}, HandleChangePassword)
 
 	huma.Register(sessionApi, huma.Operation{
-		Method:      http.MethodGet,
-		Path:        "/profile",
-		OperationID: "get-session-profile",
-		Summary:     "Get user's profile",
-		Description: "Get profile of current authenticated user",
-		Errors:      []int{http.StatusUnauthorized},
-
-		Security:    sessionCookieSecurityMap,
-		Middlewares: requireUserSessionMiddlewares,
-	}, HandleGetSessionProfile)
-
-	huma.Register(sessionApi, huma.Operation{
 		Method:      http.MethodPost,
 		Path:        "/profile",
 		OperationID: "update-session-profile",
@@ -459,27 +447,6 @@ func (i *ProfileOtherUserUnlockedAchievements) MapFromRow(row query.GetOtherUser
 			Avatar:      nil,
 		},
 	}
-}
-
-type GetSessionResponse struct {
-	Body UserProfile
-}
-
-func HandleGetSessionProfile(ctx context.Context, _ *struct{}) (*GetSessionResponse, error) {
-	principal, hasPrincipal := auth.GetPrincipal(ctx)
-	if !hasPrincipal {
-		// shouldn't ever get here due to middleware check
-		return nil, huma.Error401Unauthorized("no session")
-	}
-
-	userUuid := principal.User.Uuid
-
-	profile, err := GetUserProfile(ctx, userUuid)
-	if err != nil {
-		return nil, err
-	}
-
-	return &GetSessionResponse{Body: profile}, nil
 }
 
 type PostSessionRequest struct {
@@ -805,7 +772,7 @@ func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchU
 }
 
 type GetUserProfileRequest struct {
-	UserRID rid.RID `path:"user" required:"true"`
+	UserRID validation.SlugOrRID `path:"user" required:"true"`
 }
 
 type GetUserProfileResponse struct {
@@ -813,12 +780,28 @@ type GetUserProfileResponse struct {
 }
 
 func HandleGetUserProfile(ctx context.Context, input *GetUserProfileRequest) (*GetUserProfileResponse, error) {
-	// TODO: huma validator for rid prefix...
-	if input.UserRID.Prefix != auth.UserRidPrefix {
-		return nil, huma.Error400BadRequest("invalid user id")
+	var userUuid uuid.UUID
+
+	userRid, hasRid := input.UserRID.RID()
+	if hasRid {
+		// TODO: huma validator for rid prefix...
+		if userRid.Prefix != auth.UserRidPrefix {
+			return nil, huma.Error400BadRequest("invalid user id")
+		}
+
+		userUuid = userRid.ID
+	} else {
+		slug, _ := input.UserRID.Slug()
+
+		user, err := db.Queries.FindUserBySlug(ctx, slug)
+		if err != nil {
+			return nil, eris.Wrap(err, "can't find user by slug")
+		}
+
+		userUuid = user.Uuid
 	}
 
-	profile, err := GetUserProfile(ctx, input.UserRID.ID)
+	profile, err := GetUserProfile(ctx, userUuid)
 	if err != nil {
 		return nil, err
 	}

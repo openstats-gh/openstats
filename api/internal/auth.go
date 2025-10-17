@@ -15,6 +15,7 @@ import (
 	"github.com/dresswithpockets/openstats/app/env"
 	"github.com/dresswithpockets/openstats/app/log"
 	"github.com/dresswithpockets/openstats/app/password"
+	"github.com/dresswithpockets/openstats/app/rid"
 	"github.com/dresswithpockets/openstats/app/validation"
 	"github.com/rotisserie/eris"
 )
@@ -278,8 +279,9 @@ func HandlePostSignOut(ctx context.Context, _ *struct{}) (*SignOutResponse, erro
 }
 
 type SessionResponseBody struct {
-	Slug        string `json:"slug"`
-	DisplayName string `json:"displayName"`
+	RID         rid.RID `json:"rid"`
+	Slug        string  `json:"slug"`
+	DisplayName string  `json:"displayName"`
 }
 
 type SessionResponse struct {
@@ -301,6 +303,7 @@ func HandleGetSession(ctx context.Context, _ *struct{}) (*SessionResponse, error
 
 	return &SessionResponse{
 		Body: SessionResponseBody{
+			RID:         rid.From(auth.UserRidPrefix, principal.User.Uuid),
 			Slug:        principal.User.Slug,
 			DisplayName: userDisplayName.DisplayName,
 		},
