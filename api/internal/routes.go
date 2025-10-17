@@ -772,7 +772,7 @@ func HandleSearchUsers(ctx context.Context, input *SearchUsersRequest) (*SearchU
 }
 
 type GetUserProfileRequest struct {
-	UserRID rid.RID `path:"user" required:"true"`
+	UserRID validation.SlugOrRID `path:"user" required:"true"`
 }
 
 type GetUserProfileResponse struct {
@@ -780,12 +780,28 @@ type GetUserProfileResponse struct {
 }
 
 func HandleGetUserProfile(ctx context.Context, input *GetUserProfileRequest) (*GetUserProfileResponse, error) {
-	// TODO: huma validator for rid prefix...
-	if input.UserRID.Prefix != auth.UserRidPrefix {
-		return nil, huma.Error400BadRequest("invalid user id")
+	var userUuid uuid.UUID
+
+	userRid, hasRid := input.UserRID.RID()
+	if hasRid {
+		// TODO: huma validator for rid prefix...
+		if userRid.Prefix != auth.UserRidPrefix {
+			return nil, huma.Error400BadRequest("invalid user id")
+		}
+
+		userUuid = userRid.ID
+	} else {
+		slug, _ := input.UserRID.Slug()
+
+		user, err := db.Queries.FindUserBySlug(ctx, slug)
+		if err != nil {
+			return nil, eris.Wrap(err, "can't find user by slug")
+		}
+
+		userUuid = user.Uuid
 	}
 
-	profile, err := GetUserProfile(ctx, input.UserRID.ID)
+	profile, err := GetUserProfile(ctx, userUuid)
 	if err != nil {
 		return nil, err
 	}
