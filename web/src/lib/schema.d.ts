@@ -151,11 +151,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /**
-         * Get user's profile
-         * @description Get profile of current authenticated user
-         */
-        get: operations["get-session-profile"];
+        get?: never;
         put?: never;
         /**
          * Update user's profile
@@ -869,6 +865,13 @@ export interface components {
              */
             readonly $schema?: string;
             displayName: string;
+            /**
+             * RID
+             * Format: rid
+             * @description A type-safe UUID. Prefix indicates Resource type, suffix is a base62 encoded UUIDv7.
+             * @example u_AZhjuMmhePWkHFALenFEfg
+             */
+            rid: string;
             slug: string;
         };
         SignInBody: {
@@ -1358,44 +1361,6 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-            /** @description Internal Server Error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["ErrorModel"];
-                };
-            };
-        };
-    };
-    "get-session-profile": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["UserProfile"];
-                };
-            };
-            /** @description Unauthorized */
-            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2035,8 +2000,8 @@ export interface operations {
             header?: never;
             path: {
                 /**
-                 * @description A type-safe UUID. Prefix indicates Resource type, suffix is a base62 encoded UUIDv7.
-                 * @example u_AZhjuMmhePWkHFALenFEfg
+                 * @description A string which can either be a resource's slug or a resource's RID
+                 * @example silly-little-slug
                  */
                 user: string;
             };
@@ -2418,7 +2383,6 @@ export enum ApiPaths {
     get_session = "/internal/session/",
     add_email = "/internal/session/add-email",
     confirm_email = "/internal/session/confirm-email",
-    get_session_profile = "/internal/session/profile",
     update_session_profile = "/internal/session/profile",
     update_session_avatar = "/internal/session/profile/avatar",
     remove_email = "/internal/session/remove-email",
