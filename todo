@@ -1,4 +1,4 @@
-TODO add forgot-password endpoint (without session)
+DONE add forgot-password endpoint (without session)
 
 TODO use SMTP-based validation to ensure that the email is valid, before sending the email via AWS SES
      AWS may actually do this validation for us?
