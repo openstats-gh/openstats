@@ -26,7 +26,7 @@
   }
 
   input {
-    @apply border-1 border-zinc-600 bg-zinc-700 bg-clip-border p-2 transition-colors hover:bg-zinc-800 focus:bg-zinc-800 focus:outline-0;
+    @apply border-1 border-zinc-600 bg-zinc-700 bg-clip-border p-2 transition-colors hover:bg-zinc-800 focus:border-ctp-red-50/50 focus:bg-zinc-800 focus:outline-0;
   }
 
   .text-button {
