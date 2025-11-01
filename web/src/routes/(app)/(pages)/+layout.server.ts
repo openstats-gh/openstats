@@ -1,10 +1,9 @@
+import { redirect } from "@sveltejs/kit";
 import type { LayoutServerLoad } from "./$types";
 
 export const load: LayoutServerLoad = ({ locals }) => {
   if (!locals.session) {
-    return {
-      session: null,
-    };
+    redirect(302, "/");
   }
   return {
     session: locals.session,
