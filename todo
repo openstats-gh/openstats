@@ -8,6 +8,14 @@ TODO fork goldberg to integrate the C SDK
 
 TODO add account/data deletion
 
+TODO add favoriteAchievement property to /internal/users/v1/{user}/profile response (or UserProfile)
+TODO modify UserProfile.completedGames to give the top 5 "highest % completion" games, including a % completion or number of achievements with it
+
+TODO add properties to achievement responses:
+     property for image url
+     property for the date achieved
+     property for % of openstats players playing this game that have this achievement
+
 DONE add email-confirmation endpoint (requires session)
 DONE add resend-email-confirmation endpoint (requires session)
 DONE add change email endpoint (requires session)

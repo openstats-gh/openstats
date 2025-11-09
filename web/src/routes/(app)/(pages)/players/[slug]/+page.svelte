@@ -1,100 +1,100 @@
 <script lang="ts">
-  import Copy from "@lucide/svelte/icons/copy";
   import { page } from "$app/state";
-  import catapple from "$lib/assets/catapple.png";
-  import Achievement from "$lib/components/Achievement.svelte";
-  import type { PageProps } from "./$types";
   import { Client } from "$lib/internalApi";
-  import { browser } from "$app/environment";
-  import Game from "$lib/components/Game.svelte";
-  import AchievementPreview from "$lib/components/AchievementPreview.svelte";
-
-  const { data }: PageProps = $props();
+  import Section from "$lib/components/Section.svelte";
+  import Profile from "$lib/components/players/Profile.svelte";
+  import type { UserProfile } from "$lib/schema";
+  import ProfileGame from "$lib/components/players/ProfileGame.svelte";
+  import AchievementPartial from "$lib/components/AchievementPartial.svelte";
+  import Achievement from "$lib/components/Achievement.svelte";
 
   // assume no '/' in slug
-  async function getUserProfile() {
-    const pageSlug = page.url.pathname.substring(page.url.pathname.lastIndexOf("/") + 1);
-    return await Client.GET("/internal/users/v1/{user}/profile", {
-      fetch: fetch,
-      params: {
-        path: { user: pageSlug },
-      },
-    });
-  }
+  const pageSlug = page.url.pathname.substring(page.url.pathname.lastIndexOf("/") + 1);
 
-  // todo - spiritov: copy link to page on slug click
-  // todo - spiritov: bio
+  const { data } = await Client.GET("/internal/users/v1/{user}/profile", {
+    fetch: fetch,
+    params: {
+      path: { user: pageSlug },
+    },
+  });
+
+  let profile: UserProfile | undefined = $derived(data);
 </script>
 
 <div class="flex w-full flex-col items-center">
-  <ul class="w-5xl mt-8 flex flex-col gap-4 border-2">
-    <!-- pfp & name -->
-    {#if browser}
-      {#await getUserProfile() then { data: userProfile }}
-        <li class="flex w-full justify-between gap-4">
-          <div class="flex">
-            <img src={catapple} alt="" class="size-32" />
-            <div class="flex flex-col">
-              <h1 class="mt-2 h-10">{userProfile?.user.displayName}</h1>
-              <h3
-                class="flex cursor-pointer items-center gap-1 opacity-75 transition-opacity hover:opacity-100"
-              >
-                <span>/{userProfile?.user.slug}</span>
-                <span><Copy size="1rem" /></span>
-              </h3>
-            </div>
-          </div>
-          <!-- featured achievement -->
-          <div>
-            <Achievement src={catapple} name={"favorite achievementttttttttttttttttttt"} />
-          </div>
-        </li>
-        <!-- about me -->
-        <li class="flex w-full flex-col">
-          <h3>about me</h3>
-          <span class="">not implemented</span>
-        </li>
+  <div class="w-5xl flex flex-col gap-2">
+    <svelte:boundary {pending}>
+      {#if profile}
+        <Profile
+          user={profile.user}
+          rareAchievements={profile.rarestAchievements?.length ?? 0}
+          favoriteAchievement={profile.favoriteAchievement}
+          achievements={profile.unlockedAchievements?.length ?? 0}
+          completedGames={profile.completedGames?.length ?? 0}
+        />
+      {:else}
+        <span>no pwofile :(</span>
+      {/if}
+    </svelte:boundary>
 
-        <!-- 100%ed? / completed games, 7 max -->
-        <li class="flex w-full flex-col gap-2">
-          <h3>100% completed games</h3>
-          <div class="flex gap-1 overflow-hidden">
-            {#each { length: 8 }}
-              <Game src={catapple} />
+    <!-- 5 games, sorted by highest % achievement completion -->
+    <Section title={"games"} sideLink={"/seeall"}>
+      <div class="mt-2 flex w-full gap-2">
+        <svelte:boundary {pending}>
+          {#if profile}
+            {#each profile.completedGames as game}
+              <ProfileGame {game} />
             {/each}
-          </div>
-        </li>
+          {/if}
+        </svelte:boundary>
+      </div>
+    </Section>
 
-        <!-- rarest achievements, 14 max -->
-        <li class="flex w-full flex-col gap-2">
-          <h3>rarest achievements</h3>
-          <div class="relative flex gap-1">
-            {#each { length: 14 }}
-              <AchievementPreview src={catapple} name={"an achievement"} />
+    <!-- 6 achievements, sorted by highest rarity -->
+    <Section title="achievements" sideLink={"/seeall"}>
+      <div class="mt-2 grid grid-cols-2 grid-rows-3 gap-x-4 gap-y-1">
+        <svelte:boundary {pending}>
+          {#if profile}
+            {#each profile.rarestAchievements as achievement}
+              <AchievementPartial {achievement} />
             {/each}
-          </div>
-        </li>
+          {/if}
+        </svelte:boundary>
+      </div>
+    </Section>
 
-        <!-- recent achievements -->
-        <li class="flex w-full flex-col gap-2">
-          <h3>recent achievements</h3>
-          <div class="relative flex gap-1">
-            {#each { length: 14 }}
-              <AchievementPreview src={catapple} name={"an achievement"} />
+    <!-- 14 recent achievements -->
+    <Section title={"recent achievements"} sideLink={"/seeall"}>
+      <div class="mt-2 flex w-full gap-2">
+        <svelte:boundary {pending}>
+          {#if profile}
+            {#each profile.unlockedAchievements as achievement}
+              <Achievement {achievement} />
             {/each}
-          </div>
-        </li>
+          {/if}
+        </svelte:boundary>
+      </div>
+    </Section>
 
-        <!-- recent following / friend achievements -->
-        <li class="flex w-full flex-col gap-2">
-          <h3>recent friend achievements</h3>
-          <div class="relative flex gap-1">
-            {#each { length: 14 }}
-              <AchievementPreview src={catapple} name={"an achievement"} />
+    <!-- 4 recent friend achievements -->
+    <Section title={"recent friend achievements"} sideLink={"/seeall"}>
+      <div class="mt-2 grid grid-cols-2 grid-rows-2 gap-x-4 gap-y-1">
+        <svelte:boundary {pending}>
+          {#if profile}
+            {#each profile.unlockedAchievements as achievement}
+              <Achievement {achievement} />
             {/each}
-          </div>
-        </li>
-      {/await}
-    {/if}
-  </ul>
+          {/if}
+        </svelte:boundary>
+      </div>
+    </Section>
+  </div>
 </div>
+
+{#snippet pending()}
+  <span>loading profile..</span>
+{/snippet}
+
+<style lang="postcss">
+  @reference "../../../../../app.css";
+</style>

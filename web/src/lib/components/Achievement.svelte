@@ -1,8 +1,25 @@
 <script lang="ts">
-  let { src, name, desc = "" }: { src: string; name: string; desc?: string } = $props();
+  import type { ProfileUnlockedAchievement } from "$lib/schema";
+  import missing_achievement_icon from "$lib/assets/missing_achievement_icon.png";
+
+  import AchievementFull from "$lib/components/AchievementFull.svelte";
+
+  type Props = {
+    achievement: ProfileUnlockedAchievement;
+    withTooltip?: boolean;
+  };
+
+  let { achievement, withTooltip = false }: Props = $props();
 </script>
 
-<div class="border-1 flex w-64 shrink-0 items-center gap-2 border-zinc-700 bg-zinc-900 p-2">
-  <img {src} alt="" class="size-16" />
-  <span class="overflow-hidden overflow-ellipsis text-nowrap">{name}</span>
+<div class="relative">
+  <div class="peer size-16">
+    {#if achievement.avatarUrl}
+      <img src={achievement.avatarUrl} alt="" />
+    {:else}
+      <img src={missing_achievement_icon} alt="" />
+    {/if}
+  </div>
+
+  <AchievementFull {achievement} {withTooltip} />
 </div>

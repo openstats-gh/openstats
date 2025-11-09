@@ -7,12 +7,13 @@
   import { assert } from "$lib/assert";
 
   let register = $state(false);
+  let cooldown = $state(false);
   let formErrors: ErrorDetail[] = $state([]);
 
   async function handleSignin(
     event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement },
   ) {
-    // TODO: disable submit with variable..
+    cooldown = true;
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
@@ -38,11 +39,13 @@
     }
 
     formErrors = error?.errors as [];
+    cooldown = false;
   }
 
   async function handleSignup(
     event: SubmitEvent & { currentTarget: EventTarget & HTMLFormElement },
   ) {
+    cooldown = true;
     event.preventDefault();
 
     const formData = new FormData(event.currentTarget);
@@ -73,6 +76,7 @@
     }
 
     formErrors = error?.errors as [];
+    cooldown = false;
   }
 </script>
 
@@ -80,7 +84,13 @@
   <div class="flex w-fit flex-col gap-8">
     <form
       method="POST"
-      onsubmit={register ? handleSignup : handleSignin}
+      onsubmit={cooldown
+        ? register
+          ? handleSignup
+          : handleSignin
+        : (event) => {
+            event.preventDefault();
+          }}
       class="w-md flex flex-col gap-4"
     >
       <h1 class="text-center">openstats</h1>
