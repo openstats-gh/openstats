@@ -20,6 +20,7 @@
 
   h1 {
     font-size: 2rem;
+    color: theme(--color-ctp-red);
   }
 
   h2 {
@@ -28,7 +29,14 @@
 
   h3 {
     font-size: 1.17rem;
-    color: theme(--color-ctp-red);
+  }
+
+  img {
+    @apply h-full w-full object-cover;
+  }
+
+  hr {
+    @apply border-1 border-zinc-600;
   }
 
   input {
